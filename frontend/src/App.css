@@ -1,0 +1,155 @@
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+  text-align: left;
+}
+
+.header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.panel {
+  margin-top: 1.75rem;
+  padding: 1.25rem 1.25rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.hint {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.field input {
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.file-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.file-input input {
+  font-size: 0.85rem;
+}
+
+.file-list {
+  margin: 1rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.file-list li {
+  margin-bottom: 0.35rem;
+}
+
+.meta {
+  margin-left: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.primary {
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.error {
+  margin-top: 1rem;
+  color: var(--danger);
+  font-size: 0.95rem;
+}
+
+.status code {
+  font-size: 0.9em;
+}
+
+.json {
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border-radius: 8px;
+  background: var(--code-bg);
+  overflow: auto;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  max-height: 420px;
+}
+
+.downloads {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.download {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.key-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.key-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.key-summary {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.key-summary code {
+  color: var(--text);
+}
