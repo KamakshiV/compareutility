@@ -210,3 +210,4 @@ Set `AZURE_STORAGE_CONNECTION_STRING` and `AZURE_CONTAINER_NAME` in `backend/.en
 - Swap `BackgroundTasks` for **Celery + Redis** (Redis service is already in `docker-compose.yml`).
 - Add Alembic migrations instead of `create_all` on startup.
 - Harden SAP integration (HANA client, RFC, or governed ODBC) instead of JSON exports.
+# compareutility
