@@ -47,21 +47,41 @@
   color: rgba(232, 185, 35, 0.92);
 }
 
-.site-header-logo {
+.site-header-clock {
   flex-shrink: 0;
-  line-height: 0;
+  text-align: right;
+  line-height: 1.25;
+  padding: 0.35rem 0.65rem 0.4rem 0.75rem;
   border-radius: 8px;
-  padding: 0.35rem 0.5rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.site-header-logo img {
+.site-header-time {
   display: block;
-  height: clamp(40px, 8vw, 52px);
-  width: auto;
-  max-width: min(220px, 42vw);
-  object-fit: contain;
+  font-size: clamp(1rem, 2.8vw, 1.2rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.site-header-tz {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: rgba(240, 244, 250, 0.75);
+  max-width: min(280px, 52vw);
+  line-height: 1.35;
+}
+
+.site-header-tz-short {
+  color: rgba(232, 185, 35, 0.95);
+  font-weight: 600;
+}
+
+.site-header-tz-iana {
+  word-break: break-all;
 }
 
 .app-main {
@@ -155,11 +175,33 @@
 .site-footer-bar {
   padding-top: 1.25rem;
   border-top: 1px solid rgba(232, 185, 35, 0.2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.25rem;
 }
 
 .site-footer-mark {
   font-size: 0.85rem;
   color: rgba(240, 244, 250, 0.55);
+}
+
+.site-footer-logo {
+  flex-shrink: 0;
+  line-height: 0;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.site-footer-logo img {
+  display: block;
+  height: clamp(36px, 7vw, 48px);
+  width: auto;
+  max-width: min(200px, 70vw);
+  object-fit: contain;
 }
 
 .panel {

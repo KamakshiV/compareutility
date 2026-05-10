@@ -22,6 +22,18 @@ function App() {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [selectedNarrative, setSelectedNarrative] = useState<string[]>([])
   const [columnsError, setColumnsError] = useState<string | null>(null)
+  const [clock, setClock] = useState(() => new Date())
+
+  const timeZoneIana = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
+  const timeZoneShort = useMemo(() => {
+    const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(clock)
+    return parts.find((p) => p.type === 'timeZoneName')?.value ?? ''
+  }, [clock])
+
+  useEffect(() => {
+    const id = window.setInterval(() => setClock(new Date()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
 
   const files = useMemo(
     () => [fileA, fileB].filter((f): f is UploadedFile => f != null),
@@ -168,11 +180,25 @@ function App() {
       <header className="site-header">
         <div className="site-header-inner">
           <div className="site-header-brand">
-            <h1 className="site-header-title">Reconiq</h1>
+            <h1 className="site-header-title">ReconIQ</h1>
             <p className="site-header-sub">Reconciliation workspace</p>
           </div>
-          <div className="site-header-logo" aria-label="Turiaixis">
-            <img src="/turiaixis-logo.png" alt="Turiaixis — Speed is easy, Precision is earned" width={220} height={72} />
+          <div className="site-header-clock" aria-live="polite">
+            <time className="site-header-time" dateTime={clock.toISOString()}>
+              {clock.toLocaleTimeString(undefined, {
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+              })}
+            </time>
+            <p className="site-header-tz">
+              <span className="site-header-tz-short">{timeZoneShort}</span>
+              <span className="site-header-tz-sep" aria-hidden="true">
+                {' '}
+                ·{' '}
+              </span>
+              <span className="site-header-tz-iana">{timeZoneIana}</span>
+            </p>
           </div>
         </div>
       </header>
@@ -371,6 +397,9 @@ function App() {
           </div>
           <div className="site-footer-bar">
             <span className="site-footer-mark">© {new Date().getFullYear()} Turiaixis</span>
+            <div className="site-footer-logo" aria-label="Turiaixis">
+              <img src="/turiaixis-logo.png" alt="Turiaixis — Speed is easy, Precision is earned" width={220} height={72} />
+            </div>
           </div>
         </div>
       </footer>
