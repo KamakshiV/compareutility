@@ -61,14 +61,23 @@ async def lifespan(_: FastAPI):
             await apply_comparison_job_column_patches(conn)
         log.info("Database schema ready (create_all + patches applied).")
     except Exception as exc:
-        log.error("Database startup failed — %s: %s", type(exc).__name__, exc)
-        log.exception(
-            "Context: postgresql+asyncpg://, URL-encoded password, ?ssl=require. "
-            "If error mentions tenant/user: copy Session pooler host from Supabase → Connect into "
-            "SUPABASE_POOLER_HOST (not always aws-0-…), set SUPABASE_POOLER_PORT if needed, or paste the full pooler "
-            "DATABASE_URL and set SUPABASE_POOLER_DISABLE=1 only if using direct with IPv6/IPv4 add-on. "
-            "SUPABASE_PROJECT_REF helps bare pooler user 'postgres'."
-        )
+        ename = type(exc).__name__
+        em = str(exc).lower()
+        if "InvalidPassword" in ename or "password authentication failed" in em:
+            log.exception(
+                "Database startup failed (%s): Postgres rejected the password or role. "
+                "Paste DATABASE_URL from Supabase → Connect → Session pooler as postgresql+asyncpg://… "
+                "(user must be postgres.<project-ref>, not bare postgres). URL-encode the password in the URL "
+                "($ → %%24, @ → %%40, : → %%3A, # → %%23). If you reset the DB password in Supabase, update Render.",
+                ename,
+            )
+        else:
+            log.exception(
+                "Database startup failed (%s). Pooler/DNS: SUPABASE_POOLER_HOST, SUPABASE_POOL_REGION, "
+                "SUPABASE_PROJECT_REF, SUPABASE_POOLER_DISABLE. SSL: DATABASE_SSL_VERIFY=false only for debugging; "
+                "pin PYTHON_VERSION=3.11.9 on Render.",
+                ename,
+            )
         raise
     yield
     await engine.dispose()
