@@ -20,7 +20,7 @@ settings = get_settings()
 # Ensure pipeline LLM INFO lines appear in Render / uvicorn stderr (child loggers propagate).
 logging.getLogger("app.agents").setLevel(logging.INFO)
 
-
+logging.info("Database URL Problem")
 def _render_database_url_problem() -> Optional[str]:
     """Return an error message if DB URL is missing or still local-dev on Render."""
     if not os.environ.get("RENDER"):
@@ -60,8 +60,9 @@ async def lifespan(_: FastAPI):
         log.info("Database schema ready (create_all + patches applied).")
     except Exception:
         log.exception(
-            "Database startup failed (check DATABASE_URL: use postgresql+asyncpg://, correct password, "
-            "and for Render→Supabase IPv4 issues try the Session pooler URI on port 6543 from Supabase Connect)."
+            "Database startup failed (check DATABASE_URL: postgresql+asyncpg://, URL-encoded password, "
+            "?ssl=require). On Render, direct db.*.supabase.co:5432 is rewritten to Session pooler aws-0-<region>.pooler.supabase.com:5432; "
+            "set SUPABASE_POOL_REGION to your Supabase region if needed, or SUPABASE_POOLER_DISABLE=1 to force direct."
         )
         raise
     yield
