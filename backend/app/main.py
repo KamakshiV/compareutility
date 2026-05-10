@@ -74,8 +74,8 @@ async def lifespan(_: FastAPI):
         else:
             log.exception(
                 "Database startup failed (%s). Pooler/DNS: SUPABASE_POOLER_HOST, SUPABASE_POOL_REGION, "
-                "SUPABASE_PROJECT_REF, SUPABASE_POOLER_DISABLE. SSL: DATABASE_SSL_VERIFY=false only for debugging; "
-                "pin PYTHON_VERSION=3.11.9 on Render.",
+                "SUPABASE_PROJECT_REF, SUPABASE_POOLER_DISABLE. SSL on Render+Python>=3.14 defaults to "
+                "encrypted-without-verify; set PYTHON_VERSION=3.11.9 or DATABASE_SSL_VERIFY=true to force verify.",
                 ename,
             )
         raise

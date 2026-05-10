@@ -7,6 +7,7 @@ import os
 import re
 import socket
 import ssl
+import sys
 
 import certifi
 from sqlalchemy.engine.url import make_url
@@ -228,22 +229,14 @@ def strip_ssl_query_params_from_database_url(url: str) -> str:
         return url
 
 
-def _asyncpg_ssl_context() -> ssl.SSLContext:
-    """
-    TLS for asyncpg: prefer verify with default store + certifi. Opt out only for debugging:
-    ``DATABASE_SSL_VERIFY=false`` (encrypted but **no** cert verification — insecure).
-    """
-    if os.getenv("DATABASE_SSL_VERIFY", "true").strip().lower() in ("0", "false", "no"):
-        logger.warning(
-            "DATABASE_SSL_VERIFY is false: Postgres TLS runs without certificate verification (insecure). "
-            "Remove this once connectivity works."
-        )
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
+def _insecure_tls_context() -> ssl.SSLContext:
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
-    # Default system roots + Mozilla bundle (helps odd Render / Python 3.14 chains).
+
+def _strict_tls_context() -> ssl.SSLContext:
     ctx = ssl.create_default_context()
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     try:
@@ -251,6 +244,36 @@ def _asyncpg_ssl_context() -> ssl.SSLContext:
     except OSError:
         return ssl.create_default_context(cafile=certifi.where())
     return ctx
+
+
+def _asyncpg_ssl_context() -> ssl.SSLContext:
+    """
+    TLS for asyncpg toward cloud Postgres (Supabase).
+
+    - ``DATABASE_SSL_VERIFY=false``: encrypted, no cert verification (insecure).
+    - ``DATABASE_SSL_VERIFY=true``: always verify (may fail on Render's Python 3.14 + Supabase).
+    - **Unset** on **Render** with **Python >= 3.14**: default to no verification (same OpenSSL issue as
+      with uvloop/asyncio). Set ``PYTHON_VERSION=3.11.9`` on Render for proper verification, or set
+      ``DATABASE_SSL_VERIFY=true`` to force verify anyway.
+    """
+    flag = (os.getenv("DATABASE_SSL_VERIFY") or "").strip().lower()
+    if flag in ("0", "false", "no"):
+        logger.warning(
+            "DATABASE_SSL_VERIFY is false: Postgres TLS runs without certificate verification (insecure)."
+        )
+        return _insecure_tls_context()
+    if flag in ("1", "true", "yes"):
+        return _strict_tls_context()
+
+    if os.environ.get("RENDER") and sys.version_info >= (3, 14):
+        logger.warning(
+            "Render is using Python >= 3.14: Postgres TLS defaults to **no certificate verification** "
+            "(encrypted only). Supabase + this runtime still hit SSLCertVerificationError when verify is on. "
+            "Set PYTHON_VERSION=3.11.9 on the service, or set DATABASE_SSL_VERIFY=true to force verification."
+        )
+        return _insecure_tls_context()
+
+    return _strict_tls_context()
 
 
 def connect_args_for_asyncpg(url: str) -> dict:
