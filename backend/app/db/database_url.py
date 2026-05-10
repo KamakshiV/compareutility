@@ -82,6 +82,40 @@ def rewrite_supabase_direct_to_session_pooler_on_render(url: str) -> str:
     return new_u.render_as_string(hide_password=False)
 
 
+def align_supabase_pooler_username(url: str) -> str:
+    """
+    Supavisor Session pooler expects ``postgres.<project-ref>``, not bare ``postgres``.
+    If ``DATABASE_URL`` already points at ``*.pooler.supabase.com`` with user ``postgres``,
+    set env ``SUPABASE_PROJECT_REF`` (same id as in ``db.<id>.supabase.co``) so we can fix it.
+    """
+    ref = (os.getenv("SUPABASE_PROJECT_REF") or os.getenv("SUPABASE_PROJECT_ID") or "").strip()
+    try:
+        u = make_url(url)
+    except Exception:
+        return url
+    host = (u.host or "").lower()
+    if not host.endswith(".pooler.supabase.com"):
+        return url
+    user = (u.username or "").strip()
+    if user.startswith("postgres.") and len(user) > len("postgres."):
+        return url
+    if user not in ("postgres", ""):
+        return url
+    if not ref:
+        if os.environ.get("RENDER"):
+            logger.warning(
+                "DATABASE_URL uses pooler host with user 'postgres'. "
+                "Add SUPABASE_PROJECT_REF=<your project ref> (from db.<ref>.supabase.co) or use user postgres.<ref> in the URL."
+            )
+        return url
+    try:
+        new_u = u.set(username=f"postgres.{ref}")
+        logger.info("Adjusted pooler DATABASE_URL username using SUPABASE_PROJECT_REF.")
+        return new_u.render_as_string(hide_password=False)
+    except Exception:
+        return url
+
+
 def connect_args_for_asyncpg(url: str) -> dict:
     """
     Local Docker: no extra SSL (plain Postgres).
