@@ -15,6 +15,23 @@ logger = logging.getLogger(__name__)
 _DEFAULT_POOL_REGION = "us-east-1"
 
 
+def sanitize_pool_region(raw: str | None) -> str:
+    """
+    Pooler hostname is ``aws-0-<region>.pooler.supabase.com``. Region must look like ``us-east-1``;
+    dashboard labels like "East US" or typos cause DNS failures (gaierror -2).
+    """
+    r = (raw or _DEFAULT_POOL_REGION).strip().lower().replace("_", "-")
+    if re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", r or ""):
+        return r
+    if (raw or "").strip():
+        logger.warning(
+            "SUPABASE_POOL_REGION=%r is not a valid AWS-style region slug; using %s instead.",
+            raw,
+            _DEFAULT_POOL_REGION,
+        )
+    return _DEFAULT_POOL_REGION
+
+
 def sanitize_pooler_host(raw: str) -> str:
     """Strip common copy/paste mistakes from SUPABASE_POOLER_HOST (scheme, path, port, quotes)."""
     h = (raw or "").strip().strip('"').strip("'")
@@ -74,9 +91,7 @@ def rewrite_supabase_direct_to_session_pooler_on_render(url: str) -> str:
         return url
 
     project_ref = m.group(1)
-    region = (os.getenv("SUPABASE_POOL_REGION") or _DEFAULT_POOL_REGION).strip().replace("_", "-")
-    if not region:
-        region = _DEFAULT_POOL_REGION
+    region = sanitize_pool_region(os.getenv("SUPABASE_POOL_REGION"))
     # Dashboard "Connect" shows the exact host (aws-0 vs aws-1, etc.); guessing causes "Tenant or user not found".
     pooler_host = sanitize_pooler_host(os.getenv("SUPABASE_POOLER_HOST") or "")
     if not pooler_host:
@@ -186,6 +201,9 @@ def validate_database_url_dns_on_render(url: str) -> None:
     """
     if not os.environ.get("RENDER"):
         return
+    if os.getenv("SKIP_DATABASE_DNS_CHECK", "").strip().lower() in ("1", "true", "yes"):
+        logger.warning("SKIP_DATABASE_DNS_CHECK is set; skipping DNS validation for DATABASE_URL.")
+        return
     low = url.lower()
     if "127.0.0.1" in low or "localhost" in low:
         return
@@ -211,11 +229,15 @@ def validate_database_url_dns_on_render(url: str) -> None:
     try:
         socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
-        raise ValueError(
+        msg = (
             f"Database hostname does not resolve in DNS: {host!r} (port {port}). "
-            "Remove or fix SUPABASE_POOLER_HOST; fix typos in SUPABASE_POOL_REGION; or paste the full "
-            "Session pooler URI from Supabase → Connect. Password must not break the URL (encode @ as %40)."
-        ) from exc
+            "Remove or fix SUPABASE_POOLER_HOST; set SUPABASE_POOL_REGION to a slug like us-east-1 "
+            "(not a display name); or paste the full Session pooler URI from Supabase → Connect as "
+            "DATABASE_URL and set SUPABASE_POOLER_DISABLE=1. Password must be URL-encoded (@ as %40). "
+            f"(getaddrinfo error: {exc!s})"
+        )
+        logger.error(msg)
+        raise ValueError(msg) from None
 
 
 def log_effective_db_target(url: str) -> None:
