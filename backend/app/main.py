@@ -61,10 +61,11 @@ async def lifespan(_: FastAPI):
     except Exception as exc:
         log.error("Database startup failed — %s: %s", type(exc).__name__, exc)
         log.exception(
-            "Context (check DATABASE_URL: postgresql+asyncpg://, URL-encoded password, ?ssl=require). "
-            "On Render, direct db.*:5432 is rewritten to Session pooler; set SUPABASE_POOL_REGION if wrong region. "
-            "If the pooler rejects auth, set SUPABASE_PROJECT_REF to your Supabase project id (hostname db.<id>.supabase.co). "
-            "SUPABASE_POOLER_DISABLE=1 forces direct (needs IPv6 or Supabase IPv4 add-on)."
+            "Context: postgresql+asyncpg://, URL-encoded password, ?ssl=require. "
+            "If error mentions tenant/user: copy Session pooler host from Supabase → Connect into "
+            "SUPABASE_POOLER_HOST (not always aws-0-…), set SUPABASE_POOLER_PORT if needed, or paste the full pooler "
+            "DATABASE_URL and set SUPABASE_POOLER_DISABLE=1 only if using direct with IPv6/IPv4 add-on. "
+            "SUPABASE_PROJECT_REF helps bare pooler user 'postgres'."
         )
         raise
     yield

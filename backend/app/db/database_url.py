@@ -59,7 +59,14 @@ def rewrite_supabase_direct_to_session_pooler_on_render(url: str) -> str:
     region = (os.getenv("SUPABASE_POOL_REGION") or _DEFAULT_POOL_REGION).strip().replace("_", "-")
     if not region:
         region = _DEFAULT_POOL_REGION
-    pooler_host = f"aws-0-{region}.pooler.supabase.com"
+    # Dashboard "Connect" shows the exact host (aws-0 vs aws-1, etc.); guessing causes "Tenant or user not found".
+    pooler_host = (os.getenv("SUPABASE_POOLER_HOST") or "").strip()
+    if not pooler_host:
+        pooler_host = f"aws-0-{region}.pooler.supabase.com"
+    try:
+        pool_port = int((os.getenv("SUPABASE_POOLER_PORT") or "5432").strip() or "5432")
+    except ValueError:
+        pool_port = 5432
 
     user = u.username or "postgres"
     if user == "postgres":
@@ -68,16 +75,18 @@ def rewrite_supabase_direct_to_session_pooler_on_render(url: str) -> str:
         new_user = user
 
     try:
-        new_u = u.set(host=pooler_host, port=5432, username=new_user)
+        new_u = u.set(host=pooler_host, port=pool_port, username=new_user)
     except Exception:
         return url
 
     logger.info(
-        "Rewrote Supabase DATABASE_URL to Session pooler at %s:5432 (region %s, Render IPv4). "
-        "If this fails, set SUPABASE_POOL_REGION to match Supabase → Database → Region; "
-        "SUPABASE_POOLER_DISABLE=1 restores direct db.*:5432.",
+        "Rewrote Supabase DATABASE_URL to pooler host %s:%s (user %s). "
+        "If you see 'Tenant or user not found', set SUPABASE_POOLER_HOST to the exact host from "
+        "Supabase → Connect → Session pooler (may be aws-1-… not aws-0-…). "
+        "SUPABASE_POOLER_PORT if your string uses 6543. SUPABASE_POOLER_DISABLE=1 restores direct.",
         pooler_host,
-        region,
+        pool_port,
+        new_user,
     )
     return new_u.render_as_string(hide_password=False)
 
@@ -137,10 +146,36 @@ def connect_args_for_asyncpg(url: str) -> dict:
         return {}
 
     args: dict = {"timeout": connect_timeout}
+    # Transaction pooler / PgBouncer-style: disable prepared statement cache for asyncpg.
+    try:
+        pu = make_url(url)
+        ph = (pu.host or "").lower()
+        pport = pu.port or 5432
+        if ph.endswith(".pooler.supabase.com") and pport == 6543:
+            args["statement_cache_size"] = 0
+    except Exception:
+        pass
     if "ssl=" in low or "sslmode=" in low:
         return args
     args["ssl"] = True
     return args
+
+
+def log_effective_db_target(url: str) -> None:
+    """On Render, log host/port/db user (no password) to debug pooler / tenant issues."""
+    if not os.environ.get("RENDER"):
+        return
+    try:
+        pu = make_url(url)
+        logger.info(
+            "Effective DATABASE_URL target: host=%s port=%s database=%s username=%s",
+            pu.host,
+            pu.port or 5432,
+            pu.database,
+            pu.username or "",
+        )
+    except Exception:
+        pass
 
 
 def log_supabase_pooler_hint_if_render(url: str) -> None:
