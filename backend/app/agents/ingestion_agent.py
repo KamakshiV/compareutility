@@ -26,6 +26,7 @@ def run(state: ReconcileState) -> dict:
         + str(notes)
         + "\n\nGive 3-5 short bullets: what an analyst should double-check before trusting the compare "
         "(pairing, naming, duplicates, file types). Do not invent data not implied above.",
+        stage="ingestion",
         max_user_chars=2000,
     )
     if llm is not None:

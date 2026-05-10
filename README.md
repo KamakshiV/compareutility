@@ -51,16 +51,89 @@ backend/app/
     └── schemas.py          # Pydantic request/response models
 ```
 
-## Deploy frontend on Vercel
+## Production deployment (recommended stack)
 
-1. In the [Vercel dashboard](https://vercel.com), **Add New Project** and import this repo (or connect GitHub).
-2. Set **Root Directory** to `frontend` (not the monorepo root).
-3. Framework preset **Vite**; build output `dist` (already set in `frontend/vercel.json`).
-4. Under **Environment Variables**, add:
-   - `VITE_API_BASE` — full origin of your deployed FastAPI API, e.g. `https://api.yourdomain.com` (no trailing slash). Local dev uses `http://127.0.0.1:8000` from `frontend/.env`.
-5. On the **API server**, set `CORS_ORIGINS` in `backend/.env` to include your Vercel site origin, e.g. `https://your-app.vercel.app` (comma-separated if you have several). Restart the API after changing it.
+Target setup:
 
-The browser only talks to your FastAPI backend; Vercel hosts static assets and the SPA. Keep secrets (OpenAI keys, DB URL, Azure) on the server, not in Vercel, except public values like `VITE_API_BASE`.
+| Layer | Service |
+| --- | --- |
+| **Frontend** | [Vercel](https://vercel.com) |
+| **Backend** | [Render](https://render.com) (Docker Web Service) |
+| **Database** | [Supabase](https://supabase.com) Postgres |
+| **AI** | [OpenAI](https://platform.openai.com) API (`USE_LLM_SUMMARY` + `OPENAI_API_KEY`) |
+
+Repo files that help: `render.yaml` (Render Blueprint), `backend/Dockerfile` (API image).
+
+### 1. Supabase Postgres
+
+1. Create a project → **Project Settings → Database**.
+2. Copy the **URI** connection string (direct `5432` is simplest with this app).
+3. Convert it for SQLAlchemy **asyncpg**:
+   - Change the scheme from `postgresql://` to **`postgresql+asyncpg://`**.
+   - Append **`?ssl=require`** (Supabase requires TLS), e.g.  
+     `postgresql+asyncpg://postgres:YOUR_PASSWORD@db.xxxxx.supabase.co:5432/postgres?ssl=require`
+4. If the DB password contains `@`, `:`, or `/`, **URL-encode** it.
+
+The API runs `create_all` + small `ALTER … IF NOT EXISTS` patches on startup, so tables are created on first boot (no separate migration step required for the POC).
+
+### 2. Render (backend)
+
+1. **New → Blueprint** and connect the repo, *or* **New → Web Service** and point at this repo.
+2. Use **`backend`** as the **root directory** (or deploy from the repo root using `render.yaml`, which sets `rootDir: backend`).
+3. **Docker** build (`backend/Dockerfile`). Render sets **`PORT`**; the image already uses it.
+4. **Health check path:** `/health`.
+5. **Environment variables** (Render dashboard — mark secrets as **Secret**):
+
+   | Variable | Example / notes |
+   | --- | --- |
+   | `DATABASE_URL` | Supabase URI with `postgresql+asyncpg://` and `?ssl=require` |
+   | `CORS_ORIGINS` | `https://your-app.vercel.app,https://your-app-git-main-xxx.vercel.app` (every Vercel origin you use, comma-separated, **no** trailing slashes) |
+   | `OPENAI_API_KEY` | From OpenAI (keep **only** on Render) |
+   | `USE_LLM_SUMMARY` | `true` or `false` |
+   | `STORAGE_LOCAL_PATH` | e.g. `/var/data/storage` (optional; see note below) |
+
+**Ephemeral disk:** On Render’s **free** tier, local file storage is wiped on redeploy. For anything beyond a demo, configure **Azure Blob** (`AZURE_STORAGE_CONNECTION_STRING`, `AZURE_CONTAINER_NAME`) so uploads and reports persist.
+
+### 3. Vercel (frontend)
+
+1. **Add New Project** → import the same repo.
+2. **Root Directory:** `frontend`.
+3. Framework **Vite**; output `dist` (see `frontend/vercel.json`).
+4. **Environment variable:** `VITE_API_BASE` = your Render service URL, e.g. `https://reconiq-api.onrender.com` (**HTTPS**, no trailing slash).  
+   Production and **Preview** deployments can use the same API URL, or separate Render services if you prefer.
+
+### 4. OpenAI
+
+- Set `OPENAI_API_KEY` on **Render** (not in Vercel).
+- Set `USE_LLM_SUMMARY=true` when you want pipeline + insight LLM calls; `false` for deterministic-only (no OpenAI usage).
+
+### 5. Order of operations
+
+1. Supabase project + `DATABASE_URL`  
+2. Render deploy + verify `https://<your-service>.onrender.com/health`  
+3. Vercel `VITE_API_BASE` → that API URL  
+4. Update Render `CORS_ORIGINS` to match your real Vercel URLs, **redeploy** if needed  
+
+**Free-tier caveat:** Render free web services **sleep** after idle time; the first request after sleep can take tens of seconds. Upgrade or use a keep-alive ping if that matters for demos.
+
+**Render build error: `Could not open requirements file ... requirements.txt`:** The service is using the **monorepo root** as its working directory. Fix one of these ways:
+
+1. **Docker (recommended):** In the service **Settings**, set **Root Directory** to `backend`, ensure **Environment** is **Docker**, and **Dockerfile Path** `Dockerfile` (file is `backend/Dockerfile`). Clear any custom **Build Command** that runs `pip install` at the repo root.
+2. **Native Python:** Set **Root Directory** to `backend`, **Build Command** `pip install -r requirements.txt`, **Start Command** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`, **Python version** 3.11+.
+
+Then **Manual Deploy → Clear build cache & deploy**.
+
+**Render runtime error: `Could not import module "main"`:** The start command must reference this app’s module path **`app.main:app`**, not `main:app`. In the service **Settings** → **Start Command**, set:
+
+`uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+
+With **Root Directory** `backend`, a `backend/Procfile` is included so Render’s Python runtime can pick up the correct `web` command automatically.
+
+**Render crashes during “Waiting for application startup” / lifespan:** The app opens a DB connection and runs `create_all` + column patches. Typical causes:
+
+1. **`DATABASE_URL` not set** on Render (the app would otherwise default to `127.0.0.1:5433`, which is unreachable). Set it to Supabase: `postgresql+asyncpg://…?ssl=require`.
+2. **Wrong URL** (typo, password not URL-encoded, or `postgresql://` without `+asyncpg`).
+3. **Python version:** `backend/runtime.txt` pins **3.11.x** so Render does not use an experimental 3.14 runtime that may break wheels; redeploy after pulling.
 
 ## Prerequisites
 
@@ -201,6 +274,8 @@ All of these appear under `result_json.agent_trace` in the job response (except 
 
 **Cost / latency:** with LLMs enabled, each successful job performs **five** model calls (ingestion, profiling, mapping, rules, insight). Disable the flag for fastest deterministic-only runs.
 
+**Observability:** each invocation logs at **INFO** via `app.agents.llm_tools`: **`Starting LLM service for "<purpose>" via Agent [<stage>] …`** before the model call, and **`Finished LLM service for "<purpose>" via Agent [<stage>]: success …`** (or **`: error …`**) after. Default purposes map from stage (`ingestion` → ingestion readiness review, etc.). Visible in `uvicorn` stdout/stderr (e.g. Render **Logs**).
+
 ## Optional: Azure Blob
 
 Set `AZURE_STORAGE_CONNECTION_STRING` and `AZURE_CONTAINER_NAME` in `backend/.env`. Without them, files are stored under `STORAGE_LOCAL_PATH`.
@@ -211,3 +286,12 @@ Set `AZURE_STORAGE_CONNECTION_STRING` and `AZURE_CONTAINER_NAME` in `backend/.en
 - Add Alembic migrations instead of `create_all` on startup.
 - Harden SAP integration (HANA client, RFC, or governed ODBC) instead of JSON exports.
 # compareutility
+
+If you ever need to start from scratch (3 terminals)
+1 — Postgres (repo root):
+cd /Users/kamakshi/Documents/AgenticAI-IK/CompareUtility && docker compose up -d postgres
+2 — Backend:
+cd /Users/kamakshi/Documents/AgenticAI-IK/CompareUtility/backend && source .venv/bin/activate && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+3 — Frontend:
+cd /Users/kamakshi/Documents/AgenticAI-IK/CompareUtility/frontend && npm run dev
+Open http://127.0.0.1:5173 (with default .env, requests use the Vite /api proxy to port 8000).

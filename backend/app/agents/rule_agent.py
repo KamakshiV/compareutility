@@ -28,6 +28,7 @@ def run(state: ReconcileState) -> dict:
         + str({"schema_profile": profile, "recommended_rules": rules})
         + "\n\nIn 4-6 bullets: what this policy implies, edge cases (duplicate keys, type coercion), "
         "and what is NOT detected. Mention one-way File A→File B for spreadsheets.",
+        stage="rules",
         max_user_chars=4000,
     )
     if llm is not None:

@@ -1,0 +1,17 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# After first deploy, set secret env vars in the Render dashboard (DATABASE_URL, OPENAI_API_KEY, CORS_ORIGINS, etc.).
+
+services:
+  - type: web
+    name: reconiq-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # Set in dashboard (do not commit secrets):
+      # DATABASE_URL — Supabase, must use postgresql+asyncpg:// and ?ssl=require
+      # CORS_ORIGINS — your Vercel production + preview URLs, comma-separated
+      # OPENAI_API_KEY — if using USE_LLM_SUMMARY
+      # USE_LLM_SUMMARY — true/false
+      # STORAGE_LOCAL_PATH — /var/data/storage (optional; disk is ephemeral on free tier)

@@ -28,6 +28,7 @@ def run(state: ReconcileState) -> dict:
         + str(profile)
         + "\n\nIn 4-6 bullets, explain limitations and caveats of this POC setup for this kind "
         "(e.g. first sheet only, text PDFs vs scanned, SAP JSON shape). No generic filler.",
+        stage="schema_profiler",
         max_user_chars=3000,
     )
     if llm is not None:

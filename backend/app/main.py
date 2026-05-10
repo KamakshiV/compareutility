@@ -1,3 +1,5 @@
+import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -13,9 +15,19 @@ from app.db.schema_patches import apply_comparison_job_column_patches
 
 settings = get_settings()
 
+# Ensure pipeline LLM INFO lines appear in Render / uvicorn stderr (child loggers propagate).
+logging.getLogger("app.agents").setLevel(logging.INFO)
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # Render sets RENDER=true; a missing DATABASE_URL leaves the default local URL and startup will fail.
+    if os.environ.get("RENDER") and "DATABASE_URL" not in os.environ:
+        raise RuntimeError(
+            "DATABASE_URL is not set on Render. Add it under Environment: your Supabase URI as "
+            "postgresql+asyncpg://USER:PASSWORD@HOST:5432/postgres?ssl=require "
+            "(URL-encode special characters in the password)."
+        )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await apply_comparison_job_column_patches(conn)

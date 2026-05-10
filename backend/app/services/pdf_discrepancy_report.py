@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 from typing import Any
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
@@ -13,6 +14,49 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 _ACCENT_HEX = {"red": "#C0392B", "orange": "#E67E22"}
+
+_MIN_COL_PT = 34  # minimum width per narrow column (~0.47") so labels stay readable
+
+
+def _column_widths_pt(headers: list[str], usable_pt: float) -> list[float]:
+    """Widen Comments vs equal split; keep widths summing to usable_pt."""
+    n = len(headers)
+    if n <= 0:
+        return []
+    if n == 1:
+        return [usable_pt]
+
+    comments_idx = None
+    for i, h in enumerate(headers):
+        if str(h).strip().lower() == "comments":
+            comments_idx = i
+
+    equal = usable_pt / n
+    if comments_idx is None:
+        return [equal] * n
+
+    # Aim for Comments ≈ max(2× equal share, 26% of row); cap so others stay ≥ _MIN_COL_PT.
+    comments_target = min(max(equal * 2.2, usable_pt * 0.26), usable_pt * 0.45)
+    others_w = (usable_pt - comments_target) / (n - 1)
+    if others_w < _MIN_COL_PT:
+        others_w = _MIN_COL_PT
+        comments_target = usable_pt - others_w * (n - 1)
+    comments_target = max(comments_target, _MIN_COL_PT)
+
+    out = [others_w] * n
+    out[comments_idx] = usable_pt - others_w * (n - 1)
+    return out
+
+
+def _para_fragment(raw: str) -> str:
+    """Safe subset HTML for ReportLab Paragraph."""
+    if raw is None:
+        return ""
+    s = str(raw)
+    if len(s) > 1200:
+        s = s[:1197] + "..."
+    s = escape(s)
+    return s.replace("\n", "<br/>")
 
 
 def render_discrepancy_pdf(payload: dict[str, Any]) -> bytes:
@@ -60,6 +104,21 @@ def render_discrepancy_pdf(payload: dict[str, Any]) -> bytes:
         textColor=colors.HexColor("#444444"),
         spaceAfter=8,
     )
+    cell_style = ParagraphStyle(
+        "PDFCell",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=9.5,
+        textColor=colors.HexColor("#2C3E50"),
+        alignment=TA_LEFT,
+        wordWrap="LTR",
+    )
+    header_cell_style = ParagraphStyle(
+        "PDFHeaderCell",
+        parent=cell_style,
+        fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#2C3E50"),
+    )
 
     story: list[Any] = []
     story.append(Paragraph(payload.get("title", "Report"), title_style))
@@ -92,11 +151,17 @@ def render_discrepancy_pdf(payload: dict[str, Any]) -> bytes:
                     row.append("")
                 row[:] = row[: len(headers)]
 
-        table_data = [headers] + data
+        header_cells = [
+            Paragraph(f"<b>{_para_fragment(h)}</b>", header_cell_style) for h in headers
+        ]
+        body_cells = [
+            [Paragraph(_para_fragment(v), cell_style) for v in row] for row in data
+        ]
+        table_data = [header_cells] + body_cells
         col_count = len(headers)
-        avail = letter[0] - 1.3 * inch
-        col_w = avail / max(col_count, 1)
-        t = Table(table_data, colWidths=[col_w] * col_count, repeatRows=1)
+        avail = letter[0] - doc.leftMargin - doc.rightMargin
+        col_widths = _column_widths_pt(headers, float(avail))
+        t = Table(table_data, colWidths=col_widths, repeatRows=1)
         t.setStyle(
             TableStyle(
                 [

@@ -26,6 +26,7 @@ def run(state: ReconcileState) -> dict:
         + "\n\nIn 4-7 bullets: risks when keys or narrative labels are mis-chosen; "
         "when same-name columns might still differ in meaning; what to verify if schemas drift. "
         "Do not contradict that matching is by exact column name in this POC.",
+        stage="mapping",
         max_user_chars=3500,
     )
     if llm is not None:

@@ -25,6 +25,7 @@ def run(state: ReconcileState) -> dict[str, Any]:
     text = pipeline_llm_complete(
         "You are a data comparison assistant for finance and operations teams.",
         user,
+        stage="insight",
         max_user_chars=12000,
     )
     return {"llm_insight": text}
