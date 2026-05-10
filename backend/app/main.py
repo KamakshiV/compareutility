@@ -50,6 +50,8 @@ def _render_database_url_problem() -> Optional[str]:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     log = logging.getLogger(__name__)
+    # Runs only after a successful image/build when the web process starts (not during `pip install`).
+    log.info("Startup: FastAPI lifespan running — next step is database connect + schema.")
     msg = _render_database_url_problem()
     if msg:
         raise RuntimeError(msg)
