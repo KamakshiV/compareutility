@@ -10,6 +10,7 @@ from app.db.database_url import (
     log_supabase_pooler_hint_if_render,
     normalize_database_url,
     rewrite_supabase_direct_to_session_pooler_on_render,
+    validate_database_url_dns_on_render,
 )
 
 settings = get_settings()
@@ -19,6 +20,7 @@ _database_url = align_supabase_pooler_username(_after_pooler)
 if _database_url == _normalized_url:
     log_supabase_pooler_hint_if_render(_normalized_url)
 log_effective_db_target(_database_url)
+validate_database_url_dns_on_render(_database_url)
 
 engine = create_async_engine(
     _database_url,

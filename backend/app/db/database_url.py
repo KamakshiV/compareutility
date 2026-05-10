@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import socket
 
 from sqlalchemy.engine.url import make_url
 
@@ -14,12 +15,29 @@ logger = logging.getLogger(__name__)
 _DEFAULT_POOL_REGION = "us-east-1"
 
 
+def sanitize_pooler_host(raw: str) -> str:
+    """Strip common copy/paste mistakes from SUPABASE_POOLER_HOST (scheme, path, port, quotes)."""
+    h = (raw or "").strip().strip('"').strip("'")
+    for prefix in ("https://", "http://"):
+        if h.lower().startswith(prefix):
+            h = h[len(prefix) :]
+    h = h.strip().split("/")[0].strip()
+    if ":" in h and not h.startswith("["):
+        # "host:5432" from dashboard; not IPv6
+        parts = h.rsplit(":", 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            h = parts[0].strip()
+    return h.strip()
+
+
 def normalize_database_url(url: str) -> str:
     """
     Fix common mistakes from dashboards (typos, wrong scheme).
     Does not log or expose secrets.
     """
     u = (url or "").strip()
+    if len(u) >= 2 and u[0] == u[-1] and u[0] in "'\"":
+        u = u[1:-1].strip()
     if not u:
         return u
     # Supabase / docs typo
@@ -60,7 +78,7 @@ def rewrite_supabase_direct_to_session_pooler_on_render(url: str) -> str:
     if not region:
         region = _DEFAULT_POOL_REGION
     # Dashboard "Connect" shows the exact host (aws-0 vs aws-1, etc.); guessing causes "Tenant or user not found".
-    pooler_host = (os.getenv("SUPABASE_POOLER_HOST") or "").strip()
+    pooler_host = sanitize_pooler_host(os.getenv("SUPABASE_POOLER_HOST") or "")
     if not pooler_host:
         pooler_host = f"aws-0-{region}.pooler.supabase.com"
     try:
@@ -159,6 +177,45 @@ def connect_args_for_asyncpg(url: str) -> dict:
         return args
     args["ssl"] = True
     return args
+
+
+def validate_database_url_dns_on_render(url: str) -> None:
+    """
+    Fail fast on Render with a clear message when the DB hostname does not resolve (gaierror -2),
+    or when the URL parsed to a bogus host (often unescaped ``@`` / ``:`` in the password).
+    """
+    if not os.environ.get("RENDER"):
+        return
+    low = url.lower()
+    if "127.0.0.1" in low or "localhost" in low:
+        return
+    try:
+        u = make_url(url)
+    except Exception as exc:
+        raise ValueError(
+            "DATABASE_URL is not a valid SQLAlchemy URL (check special characters: password must be "
+            "URL-encoded, e.g. @ as %40, : as %3A, $ as %24)."
+        ) from exc
+    host = (u.host or "").strip()
+    if not host:
+        raise ValueError(
+            "DATABASE_URL has an empty hostname after parsing. This usually means the password "
+            "contains @ or : without URL-encoding, which splits the URL in the wrong place."
+        )
+    if any(c in host for c in " \t\n\r@") or ".." in host:
+        raise ValueError(
+            f"DATABASE_URL hostname looks invalid ({host!r}). Check SUPABASE_POOLER_HOST for typos, "
+            "quotes, or newlines; fix password encoding if host contains '@'."
+        )
+    port = int(u.port or 5432)
+    try:
+        socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ValueError(
+            f"Database hostname does not resolve in DNS: {host!r} (port {port}). "
+            "Remove or fix SUPABASE_POOLER_HOST; fix typos in SUPABASE_POOL_REGION; or paste the full "
+            "Session pooler URI from Supabase → Connect. Password must not break the URL (encode @ as %40)."
+        ) from exc
 
 
 def log_effective_db_target(url: str) -> None:
