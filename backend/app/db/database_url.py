@@ -6,7 +6,9 @@ import logging
 import os
 import re
 import socket
+import ssl
 
+import certifi
 from sqlalchemy.engine.url import make_url
 
 logger = logging.getLogger(__name__)
@@ -199,13 +201,18 @@ def align_supabase_pooler_username(url: str) -> str:
         return url
 
 
+def _asyncpg_ssl_context() -> ssl.SSLContext:
+    """TLS verify against Mozilla CA bundle (fixes CERTIFICATE_VERIFY_FAILED on slim / some Python builds)."""
+    return ssl.create_default_context(cafile=certifi.where())
+
+
 def connect_args_for_asyncpg(url: str) -> dict:
     """
     Local Docker: no extra SSL (plain Postgres).
 
-    Remote: if the URL already sets ssl / sslmode, do NOT pass ssl=True in connect_args —
-    combining both breaks some asyncpg / SQLAlchemy combinations. If the URL has no ssl
-    parameter, require TLS with ssl=True.
+    Remote (Supabase, Render, etc.): always pass an ``SSLContext`` backed by **certifi** so
+    certificate verification does not rely on the platform store alone (avoids
+    ``SSLCertVerificationError: self-signed certificate in certificate chain`` on some hosts).
 
     Always set a connect ``timeout`` on remote hosts so misconfigured IPv6 / firewall fails fast.
     """
@@ -219,7 +226,7 @@ def connect_args_for_asyncpg(url: str) -> dict:
     if local:
         return {}
 
-    args: dict = {"timeout": connect_timeout}
+    args: dict = {"timeout": connect_timeout, "ssl": _asyncpg_ssl_context()}
     # Transaction pooler / PgBouncer-style: disable prepared statement cache for asyncpg.
     try:
         pu = make_url(url)
@@ -229,9 +236,6 @@ def connect_args_for_asyncpg(url: str) -> dict:
             args["statement_cache_size"] = 0
     except Exception:
         pass
-    if "ssl=" in low or "sslmode=" in low:
-        return args
-    args["ssl"] = True
     return args
 
 
