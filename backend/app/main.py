@@ -20,7 +20,7 @@ settings = get_settings()
 # Ensure pipeline LLM INFO lines appear in Render / uvicorn stderr (child loggers propagate).
 logging.getLogger("app.agents").setLevel(logging.INFO)
 
-logging.info("Database URL Problem")
+logging.info("Database URL Problem Check")
 def _render_database_url_problem() -> Optional[str]:
     """Return an error message if DB URL is missing or still local-dev on Render."""
     if not os.environ.get("RENDER"):
