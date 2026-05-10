@@ -201,9 +201,56 @@ def align_supabase_pooler_username(url: str) -> str:
         return url
 
 
+def strip_ssl_query_params_from_database_url(url: str) -> str:
+    """
+    Remove ssl-related URL query keys so SQLAlchemy/asyncpg does not apply a second TLS mode
+    alongside ``connect_args['ssl']`` (avoids handshake / verify conflicts with Supabase).
+    """
+    try:
+        u = make_url(url)
+        if not u.query:
+            return url
+        ssl_keys = {
+            "ssl",
+            "sslmode",
+            "sslrootcert",
+            "sslcert",
+            "sslkey",
+            "sslsni",
+            "gssencmode",
+            "channel_binding",
+        }
+        drop = [k for k in u.query.keys() if k.lower() in ssl_keys]
+        if not drop:
+            return url
+        return u.difference_update_query(drop).render_as_string(hide_password=False)
+    except Exception:
+        return url
+
+
 def _asyncpg_ssl_context() -> ssl.SSLContext:
-    """TLS verify against Mozilla CA bundle (fixes CERTIFICATE_VERIFY_FAILED on slim / some Python builds)."""
-    return ssl.create_default_context(cafile=certifi.where())
+    """
+    TLS for asyncpg: prefer verify with default store + certifi. Opt out only for debugging:
+    ``DATABASE_SSL_VERIFY=false`` (encrypted but **no** cert verification — insecure).
+    """
+    if os.getenv("DATABASE_SSL_VERIFY", "true").strip().lower() in ("0", "false", "no"):
+        logger.warning(
+            "DATABASE_SSL_VERIFY is false: Postgres TLS runs without certificate verification (insecure). "
+            "Remove this once connectivity works."
+        )
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+
+    # Default system roots + Mozilla bundle (helps odd Render / Python 3.14 chains).
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    try:
+        ctx.load_verify_locations(cafile=certifi.where())
+    except OSError:
+        return ssl.create_default_context(cafile=certifi.where())
+    return ctx
 
 
 def connect_args_for_asyncpg(url: str) -> dict:

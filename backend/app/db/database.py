@@ -11,6 +11,7 @@ from app.db.database_url import (
     normalize_database_url,
     normalize_pooler_typo_in_database_url,
     rewrite_supabase_direct_to_session_pooler_on_render,
+    strip_ssl_query_params_from_database_url,
     validate_database_url_dns_on_render,
 )
 
@@ -23,11 +24,14 @@ if _database_url == _normalized_url:
 log_effective_db_target(_database_url)
 validate_database_url_dns_on_render(_database_url)
 
+# Drop ?ssl=… from URL so TLS is controlled only by connect_args (avoids verify failures with asyncpg+uvloop).
+_engine_database_url = strip_ssl_query_params_from_database_url(_database_url)
+
 engine = create_async_engine(
-    _database_url,
+    _engine_database_url,
     echo=settings.debug,
     pool_pre_ping=True,
-    connect_args=connect_args_for_asyncpg(_database_url),
+    connect_args=connect_args_for_asyncpg(_engine_database_url),
 )
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
