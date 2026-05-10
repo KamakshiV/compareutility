@@ -15,12 +15,38 @@ logger = logging.getLogger(__name__)
 _DEFAULT_POOL_REGION = "us-east-1"
 
 
+def fix_aws_region_hyphen_typo(region: str) -> str:
+    """
+    Common typo: ``us-east1`` / ``eu-west1`` (missing hyphen before the trailing digit).
+    Correct form: ``us-east-1``, ``eu-west-1``. Idempotent for already-valid slugs.
+    """
+    r = (region or "").strip().lower()
+    m = re.fullmatch(r"([a-z]{2})-([a-z]+)(\d)$", r)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    return r
+
+
+def fix_supabase_pooler_hostname(host: str) -> str:
+    """Fix region typos inside ``aws-*-<region>.pooler.supabase.com``."""
+    hl = (host or "").strip().lower()
+    m = re.fullmatch(r"(aws-\d+-)([a-z0-9-]+)(\.pooler\.supabase\.com)", hl)
+    if not m:
+        return (host or "").strip()
+    prefix, region, suffix = m.groups()
+    fixed = fix_aws_region_hyphen_typo(region)
+    if fixed != region:
+        logger.info("Corrected Supabase pooler hostname region segment %r -> %r", region, fixed)
+    return prefix + fixed + suffix
+
+
 def sanitize_pool_region(raw: str | None) -> str:
     """
     Pooler hostname is ``aws-0-<region>.pooler.supabase.com``. Region must look like ``us-east-1``;
     dashboard labels like "East US" or typos cause DNS failures (gaierror -2).
     """
     r = (raw or _DEFAULT_POOL_REGION).strip().lower().replace("_", "-")
+    r = fix_aws_region_hyphen_typo(r)
     if re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", r or ""):
         return r
     if (raw or "").strip():
@@ -44,7 +70,22 @@ def sanitize_pooler_host(raw: str) -> str:
         parts = h.rsplit(":", 1)
         if len(parts) == 2 and parts[1].isdigit():
             h = parts[0].strip()
-    return h.strip()
+    return fix_supabase_pooler_hostname(h.strip())
+
+
+def normalize_pooler_typo_in_database_url(url: str) -> str:
+    """Apply pooler hostname typo fixes when the host is embedded in ``DATABASE_URL``."""
+    try:
+        u = make_url(url)
+        h = u.host or ""
+        if not h:
+            return url
+        fixed = fix_supabase_pooler_hostname(h)
+        if fixed.lower() == h.lower():
+            return url
+        return u.set(host=fixed).render_as_string(hide_password=False)
+    except Exception:
+        return url
 
 
 def normalize_database_url(url: str) -> str:
