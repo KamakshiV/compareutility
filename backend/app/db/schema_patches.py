@@ -13,3 +13,6 @@ async def apply_comparison_job_column_patches(conn: AsyncConnection) -> None:
     await conn.execute(
         text("ALTER TABLE comparison_jobs ADD COLUMN IF NOT EXISTS narrative_field_names JSONB")
     )
+    await conn.execute(
+        text("ALTER TABLE comparison_jobs ADD COLUMN IF NOT EXISTS ordered_file_ids JSONB")
+    )

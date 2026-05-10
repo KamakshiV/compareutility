@@ -204,7 +204,7 @@ npm run dev
 
 - **Do not paste narrative text into the shell** (e.g. “(Ctrl+C)”); only run the commands above.
 
-- **Database migration:** On startup the API runs `ALTER TABLE … ADD COLUMN IF NOT EXISTS` for `key_field_names` and `narrative_field_names` on `comparison_jobs` (because `create_all` does not alter existing tables). Restart uvicorn after pulling changes. You can still run the same statements manually if you prefer.
+- **Database migration:** On startup the API runs `ALTER TABLE … ADD COLUMN IF NOT EXISTS` for `key_field_names`, `narrative_field_names`, and `ordered_file_ids` on `comparison_jobs` (because `create_all` does not alter existing tables). Restart uvicorn after pulling changes. You can still run the same statements manually if you prefer.
 
 ## File types
 

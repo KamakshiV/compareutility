@@ -12,6 +12,7 @@ from app.db.models import ComparisonJob, FileKind, JobStatus, UploadedFile
 from app.models.schemas import CreateJobRequest, JobOut
 from app.services.column_preview import list_columns_from_upload
 from app.services.storage_service import get_storage
+from app.services.job_file_order import file_ids_for_compare
 from app.workers.comparison_job import run_comparison_job
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -129,6 +130,7 @@ async def create_job(
         updated_at=datetime.utcnow(),
         key_field_names=key_fields,
         narrative_field_names=narrative_fields,
+        ordered_file_ids=[str(x) for x in body.file_ids],
     )
     job.files = files
     db.add(job)
@@ -162,7 +164,7 @@ def _job_to_out(job: ComparisonJob) -> JobOut:
         narrative_field_names=job.narrative_field_names,
         created_at=job.created_at,
         updated_at=job.updated_at,
-        file_ids=[f.id for f in job.files],
+        file_ids=file_ids_for_compare(job),
     )
 
 

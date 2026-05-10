@@ -61,6 +61,9 @@ class ComparisonJob(Base):
     key_field_names: Mapped[Optional[list[str]]] = mapped_column(JSONB, nullable=True)
     # Columns used to phrase export/PDF narratives (e.g. document number); ignored for PDF jobs
     narrative_field_names: Mapped[Optional[list[str]]] = mapped_column(JSONB, nullable=True)
+    # Request order of file_ids (File A first, File B second for spreadsheets). If null (legacy rows),
+    # workers fall back to sorting uploads by created_at.
+    ordered_file_ids: Mapped[Optional[list[str]]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 

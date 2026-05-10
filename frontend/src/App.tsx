@@ -12,7 +12,8 @@ import {
 import './App.css'
 
 function App() {
-  const [files, setFiles] = useState<UploadedFile[]>([])
+  const [fileA, setFileA] = useState<UploadedFile | null>(null)
+  const [fileB, setFileB] = useState<UploadedFile | null>(null)
   const [kindOverride, setKindOverride] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -22,9 +23,14 @@ function App() {
   const [selectedNarrative, setSelectedNarrative] = useState<string[]>([])
   const [columnsError, setColumnsError] = useState<string | null>(null)
 
+  const files = useMemo(
+    () => [fileA, fileB].filter((f): f is UploadedFile => f != null),
+    [fileA, fileB],
+  )
+
   const allPdf =
-    files.length >= 2 && files.every((f) => f.kind === 'pdf')
-  const needsKeyFields = files.length >= 2 && !allPdf
+    fileA != null && fileB != null && fileA.kind === 'pdf' && fileB.kind === 'pdf'
+  const needsKeyFields = fileA != null && fileB != null && !allPdf
 
   useEffect(() => {
     if (!needsKeyFields) {
@@ -38,7 +44,7 @@ function App() {
     setColumnsError(null)
     ;(async () => {
       try {
-        const res = await getFileColumns(files[0].id)
+        const res = await getFileColumns(fileA!.id)
         if (cancelled) return
         setKeyColumns(res.columns)
         setSelectedKeys([])
@@ -53,7 +59,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [needsKeyFields, files])
+  }, [needsKeyFields, fileA])
 
   const toggleKey = useCallback((name: string) => {
     setSelectedKeys((prev) =>
@@ -67,17 +73,19 @@ function App() {
     )
   }, [])
 
-  const onPick = async (list: FileList | null) => {
-    if (!list?.length) return
+  const onPickSlot = async (slot: 'a' | 'b', list: FileList | null) => {
+    const raw = list?.[0]
+    if (!raw) return
     setError(null)
     setBusy(true)
     try {
-      const uploaded: UploadedFile[] = []
-      for (const f of Array.from(list)) {
-        const ko = kindOverride.trim() || undefined
-        uploaded.push(await uploadFile(f, ko))
+      const ko = kindOverride.trim() || undefined
+      const uploaded = await uploadFile(raw, ko)
+      if (slot === 'a') {
+        setFileA(uploaded)
+      } else {
+        setFileB(uploaded)
       }
-      setFiles((prev) => [...prev, ...uploaded])
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -109,8 +117,8 @@ function App() {
       setError('Select at least two files.')
       return
     }
-    if (needsKeyFields && files.length !== 2) {
-      setError('Spreadsheet compare uses exactly two files: upload File A first, then File B.')
+    if (needsKeyFields && (fileA == null || fileB == null)) {
+      setError('Choose both File A and File B.')
       return
     }
     if (needsKeyFields && selectedKeys.length < 1) {
@@ -156,18 +164,32 @@ function App() {
   }, [job?.id, job?.status, pollJob])
 
   return (
-    <div className="app">
-      <header className="header">
-        <h1>Reconiq</h1>
-        <p className="tagline">
-          Compare Excel, PDF, or SAP export (JSON) files. For spreadsheets, upload exactly two files: the
-          first is <strong>File A</strong> (baseline), the second <strong>File B</strong>. Pick key columns to
-          match rows, then pick narrative columns for how differences are described in the export.
-        </p>
+    <div className="site-shell">
+      <header className="site-header">
+        <div className="site-header-inner">
+          <div className="site-header-brand">
+            <h1 className="site-header-title">Reconiq</h1>
+            <p className="site-header-sub">Reconciliation workspace</p>
+          </div>
+          <div className="site-header-logo" aria-label="Turiaixis">
+            <img src="/turiaixis-logo.png" alt="Turiaixis — Speed is easy, Precision is earned" width={220} height={72} />
+          </div>
+        </div>
       </header>
 
+      <main className="app-main">
+        <div className="page">
+          <div className="intro-card">
+            <p className="tagline">
+              Compare Excel, PDF, or SAP export (JSON) files. Use <strong>File A</strong> for the baseline and{' '}
+              <strong>File B</strong> for the file to compare against (two separate uploads so order is never
+              ambiguous). For spreadsheets, pick key columns to match rows, then narrative columns for export
+              wording.
+            </p>
+          </div>
+
       <section className="panel">
-        <h2>1. Upload files</h2>
+        <h2>1. Upload File A and File B</h2>
         <p className="hint">
           For SAP POC exports, use JSON with <code>columns</code> and <code>rows</code>, and set kind
           override to <code>sap</code>.
@@ -180,34 +202,48 @@ function App() {
             placeholder="e.g. sap"
           />
         </label>
-        <label className="file-input">
-          <input
-            type="file"
-            multiple
-            disabled={busy}
-            onChange={(e) => void onPick(e.target.files)}
-          />
-          <span>{busy ? 'Uploading…' : 'Choose files'}</span>
-        </label>
-
-        {files.length > 0 && (
-          <ul className="file-list">
-            {files.map((f, i) => (
-              <li key={f.id}>
-                <strong>{f.original_name}</strong>
-                <span className="meta">{f.kind}</span>
-                {needsKeyFields && i < 2 && (
-                  <span className="meta">{i === 0 ? 'File A' : 'File B'}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        {needsKeyFields && files.length > 2 && (
-          <p className="error">
-            Remove extra files — spreadsheet jobs require exactly two uploads (File A, then File B).
-          </p>
-        )}
+        <div className="file-slots">
+          <div className="file-slot">
+            <span className="file-slot-label">File A (baseline)</span>
+            <label className="file-input">
+              <input
+                type="file"
+                disabled={busy}
+                onChange={(e) => {
+                  void onPickSlot('a', e.target.files)
+                  e.currentTarget.value = ''
+                }}
+              />
+              <span>{busy ? 'Uploading…' : fileA ? 'Replace file…' : 'Choose file…'}</span>
+            </label>
+            {fileA && (
+              <p className="file-chosen">
+                <strong>{fileA.original_name}</strong>
+                <span className="meta">{fileA.kind}</span>
+              </p>
+            )}
+          </div>
+          <div className="file-slot">
+            <span className="file-slot-label">File B (compare to)</span>
+            <label className="file-input">
+              <input
+                type="file"
+                disabled={busy}
+                onChange={(e) => {
+                  void onPickSlot('b', e.target.files)
+                  e.currentTarget.value = ''
+                }}
+              />
+              <span>{busy ? 'Uploading…' : fileB ? 'Replace file…' : 'Choose file…'}</span>
+            </label>
+            {fileB && (
+              <p className="file-chosen">
+                <strong>{fileB.original_name}</strong>
+                <span className="meta">{fileB.kind}</span>
+              </p>
+            )}
+          </div>
+        </div>
       </section>
 
       {needsKeyFields && (
@@ -306,6 +342,38 @@ function App() {
           )}
         </section>
       )}
+        </div>
+      </main>
+
+      <footer className="site-footer">
+        <div className="site-footer-inner">
+          <div className="site-footer-columns">
+            <section className="site-footer-block" aria-labelledby="footer-about-heading">
+              <h2 id="footer-about-heading" className="site-footer-heading">
+                About us
+              </h2>
+              <p className="site-footer-text">
+                <strong>Reconiq</strong> is a Turiaixis reconciliation tool for structured business data: match
+                rows across Excel and SAP-style exports, surface missing keys and value deltas, and download Excel
+                and PDF reports. We believe <em>speed is easy, precision is earned</em> — the product is built to
+                make that precision repeatable in your workflows.
+              </p>
+            </section>
+            <section className="site-footer-block" aria-labelledby="footer-contact-heading">
+              <h2 id="footer-contact-heading" className="site-footer-heading">
+                Contact us
+              </h2>
+              <p className="site-footer-text">
+                For demos, integrations, or enterprise deployment, reach out through your Turiaixis representative
+                or the contact channel your organization uses for vendor engagement.
+              </p>
+            </section>
+          </div>
+          <div className="site-footer-bar">
+            <span className="site-footer-mark">© {new Date().getFullYear()} Turiaixis</span>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

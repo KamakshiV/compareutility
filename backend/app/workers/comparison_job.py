@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.agents.graph import run_compare_graph
 from app.config import get_settings
 from app.db.models import ComparisonJob, JobStatus
+from app.services.job_file_order import file_ids_for_compare
 from app.services.report_generator import write_summary_report
 from app.services.storage_service import get_storage
 
@@ -32,8 +33,9 @@ async def run_comparison_job(db: AsyncSession, job_id: uuid.UUID) -> None:
     kinds: list = []
 
     try:
-        files_sorted = sorted(job.files, key=lambda f: f.created_at)
-        for uf in files_sorted:
+        by_id = {uf.id: uf for uf in job.files}
+        for fid in file_ids_for_compare(job):
+            uf = by_id[fid]
             data = await storage.read_bytes(uf.storage_key)
             ext = Path(uf.original_name).suffix or ".bin"
             lp = tmp_dir / f"{uf.id}{ext}"
