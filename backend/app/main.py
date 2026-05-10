@@ -1,6 +1,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,18 +20,48 @@ settings = get_settings()
 logging.getLogger("app.agents").setLevel(logging.INFO)
 
 
+def _render_database_url_problem() -> Optional[str]:
+    """Return an error message if DB URL is missing or still local-dev on Render."""
+    if not os.environ.get("RENDER"):
+        return None
+    raw = (os.environ.get("DATABASE_URL") or "").strip()
+    if not raw:
+        return (
+            "DATABASE_URL is not set. In the Render dashboard: Web Service → Environment → "
+            "add variable DATABASE_URL (exact name, case-sensitive). Value: Supabase URI as "
+            "postgresql+asyncpg://USER:PASSWORD@db.PROJECT.supabase.co:5432/postgres?ssl=require "
+            "(URL-encode special characters in the password). Save, then redeploy."
+        )
+    if "127.0.0.1:5433" in raw or "localhost:5433" in raw:
+        return (
+            "DATABASE_URL still points to local Docker Postgres (port 5433). On Render, replace it "
+            "with your Supabase connection string (postgresql+asyncpg://…?ssl=require)."
+        )
+    if raw.startswith("postgresql://") and "+asyncpg" not in raw.split("://", 1)[0]:
+        return (
+            "DATABASE_URL must use the async driver prefix postgresql+asyncpg:// (not postgresql:// alone). "
+            "Example: postgresql+asyncpg://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres?ssl=require"
+        )
+    return None
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    # Render sets RENDER=true; a missing DATABASE_URL leaves the default local URL and startup will fail.
-    if os.environ.get("RENDER") and "DATABASE_URL" not in os.environ:
-        raise RuntimeError(
-            "DATABASE_URL is not set on Render. Add it under Environment: your Supabase URI as "
-            "postgresql+asyncpg://USER:PASSWORD@HOST:5432/postgres?ssl=require "
-            "(URL-encode special characters in the password)."
+    log = logging.getLogger(__name__)
+    msg = _render_database_url_problem()
+    if msg:
+        raise RuntimeError(msg)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            await apply_comparison_job_column_patches(conn)
+        log.info("Database schema ready (create_all + patches applied).")
+    except Exception:
+        log.exception(
+            "Database startup failed (check DATABASE_URL: use postgresql+asyncpg://, correct password, "
+            "and for Render→Supabase IPv4 issues try the Session pooler URI on port 6543 from Supabase Connect)."
         )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await apply_comparison_job_column_patches(conn)
+        raise
     yield
     await engine.dispose()
 

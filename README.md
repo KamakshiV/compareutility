@@ -86,7 +86,7 @@ The API runs `create_all` + small `ALTER … IF NOT EXISTS` patches on startup, 
 
    | Variable | Example / notes |
    | --- | --- |
-   | `DATABASE_URL` | Supabase URI with `postgresql+asyncpg://` and `?ssl=require` |
+   | `DATABASE_URL` | Supabase URI with `postgresql+asyncpg://` and `?ssl=require` — name must be exactly **`DATABASE_URL`** (Render **Environment** tab; not only a local `.env` file). |
    | `CORS_ORIGINS` | `https://your-app.vercel.app,https://your-app-git-main-xxx.vercel.app` (every Vercel origin you use, comma-separated, **no** trailing slashes) |
    | `OPENAI_API_KEY` | From OpenAI (keep **only** on Render) |
    | `USE_LLM_SUMMARY` | `true` or `false` |
@@ -129,11 +129,13 @@ Then **Manual Deploy → Clear build cache & deploy**.
 
 With **Root Directory** `backend`, a `backend/Procfile` is included so Render’s Python runtime can pick up the correct `web` command automatically.
 
-**Render crashes during “Waiting for application startup” / lifespan:** The app opens a DB connection and runs `create_all` + column patches. Typical causes:
+**Render crashes during “Waiting for application startup” / lifespan:** The app opens a DB connection and runs `create_all` + column patches. Check **Render → Logs** for the full traceback (the app now logs **`Database startup failed`** with the underlying error).
 
-1. **`DATABASE_URL` not set** on Render (the app would otherwise default to `127.0.0.1:5433`, which is unreachable). Set it to Supabase: `postgresql+asyncpg://…?ssl=require`.
-2. **Wrong URL** (typo, password not URL-encoded, or `postgresql://` without `+asyncpg`).
-3. **Python version:** `backend/runtime.txt` pins **3.11.x** so Render does not use an experimental 3.14 runtime that may break wheels; redeploy after pulling.
+1. **`DATABASE_URL` not set** or still local — see earlier notes.
+2. **Scheme** must be **`postgresql+asyncpg://`**, not `postgresql://` alone.
+3. **Password** in the URL must match Supabase; special characters **URL-encoded**.
+4. **IPv4 vs IPv6:** Render is often IPv4-only; Supabase **direct** (`db…:5432`) can be IPv6-only. If logs show timeout / network unreachable, open Supabase **Connect** and use the **Session pooler** URI (often port **6543**), still converted to `postgresql+asyncpg://` + `?ssl=require`.
+5. **Python version:** `backend/runtime.txt` pins **3.11.x**; set Render’s Python version or use Docker so you are not on an experimental 3.14 runtime.
 
 ## Prerequisites
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Optional
-
+import logging
 import polars as pl
 
 from app.services.excel_parser import read_excel_dataframe
@@ -60,6 +60,7 @@ def compare_excel_files(
     key_field_names: Optional[list[str]] = None,
     narrative_field_names: Optional[list[str]] = None,
 ) -> dict[str, Any]:
+    logging.info("Comparing Excel files (File A → File B)")
     if len(paths) < 2:
         return {"error": "Need at least two Excel files"}
 
@@ -74,6 +75,8 @@ def compare_excel_files(
     narrative_cols = normalize_narrative_columns(narrative_field_names, keys, first_cols)
 
     pair_label = f"{paths_eff[0].name} vs {paths_eff[1].name}"
+    logging.info("Building Excel comparison summary for %s", pair_label)
+
     summary: dict[str, Any] = {
         "type": "excel",
         "sheets_mode": "first_sheet_only",
@@ -101,7 +104,7 @@ def compare_excel_files(
         "value_mismatch_records_1_1": len(vm.by_record),
         "sample_missing_in_b": missing_in_b.head(5).to_dicts() if len(missing_in_b) else [],
     }
-
+    logging.info("Build PDF Report")
     pdf_report = build_tabular_pdf_report(
         paths_eff[0].name,
         paths_eff[1].name,
