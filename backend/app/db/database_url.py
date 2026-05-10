@@ -7,7 +7,6 @@ import os
 import re
 import socket
 import ssl
-import sys
 
 import certifi
 from sqlalchemy.engine.url import make_url
@@ -250,11 +249,11 @@ def _asyncpg_ssl_context() -> ssl.SSLContext:
     """
     TLS for asyncpg toward cloud Postgres (Supabase).
 
-    - ``DATABASE_SSL_VERIFY=false``: encrypted, no cert verification (insecure).
-    - ``DATABASE_SSL_VERIFY=true``: always verify (may fail on Render's Python 3.14 + Supabase).
-    - **Unset** on **Render** with **Python >= 3.14**: default to no verification (same OpenSSL issue as
-      with uvloop/asyncio). Set ``PYTHON_VERSION=3.11.9`` on Render for proper verification, or set
-      ``DATABASE_SSL_VERIFY=true`` to force verify anyway.
+    - ``DATABASE_SSL_VERIFY=false``: encrypted, no cert verification.
+    - ``DATABASE_SSL_VERIFY=true``: verify server certs (strict CA bundle).
+    - **Unset on Render:** encrypted without verification — Supavisor/Supabase often raises
+      ``SSLCertVerificationError`` on Render even with Python 3.11 + certifi. Set
+      ``DATABASE_SSL_VERIFY=true`` only if you need strict verify and your chain works.
     """
     flag = (os.getenv("DATABASE_SSL_VERIFY") or "").strip().lower()
     if flag in ("0", "false", "no"):
@@ -265,11 +264,10 @@ def _asyncpg_ssl_context() -> ssl.SSLContext:
     if flag in ("1", "true", "yes"):
         return _strict_tls_context()
 
-    if os.environ.get("RENDER") and sys.version_info >= (3, 14):
+    if os.environ.get("RENDER"):
         logger.warning(
-            "Render is using Python >= 3.14: Postgres TLS defaults to **no certificate verification** "
-            "(encrypted only). Supabase + this runtime still hit SSLCertVerificationError when verify is on. "
-            "Set PYTHON_VERSION=3.11.9 on the service, or set DATABASE_SSL_VERIFY=true to force verification."
+            "DATABASE_SSL_VERIFY unset on Render: Postgres TLS is encrypted without certificate verification "
+            "(avoids SSLCertVerificationError with Supabase pooler). Set DATABASE_SSL_VERIFY=true to force verify."
         )
         return _insecure_tls_context()
 
@@ -280,9 +278,8 @@ def connect_args_for_asyncpg(url: str) -> dict:
     """
     Local Docker: no extra SSL (plain Postgres).
 
-    Remote (Supabase, Render, etc.): always pass an ``SSLContext`` backed by **certifi** so
-    certificate verification does not rely on the platform store alone (avoids
-    ``SSLCertVerificationError: self-signed certificate in certificate chain`` on some hosts).
+    Remote: pass an ``SSLContext`` from ``_asyncpg_ssl_context()`` (strict off Render unless
+    ``DATABASE_SSL_VERIFY=true``).
 
     Always set a connect ``timeout`` on remote hosts so misconfigured IPv6 / firewall fails fast.
     """
