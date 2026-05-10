@@ -10,6 +10,7 @@ from app.api import routes_health, routes_jobs, routes_reports, routes_upload
 from app.config import get_settings
 from app.db.base import Base
 from app.db.database import engine
+from app.db.database_url import normalize_database_url
 from app.db import models as db_models  # noqa: F401
 from app.db.schema_patches import apply_comparison_job_column_patches
 
@@ -37,7 +38,8 @@ def _render_database_url_problem() -> Optional[str]:
             "DATABASE_URL still points to local Docker Postgres (port 5433). On Render, replace it "
             "with your Supabase connection string (postgresql+asyncpg://…?ssl=require)."
         )
-    if raw.startswith("postgresql://") and "+asyncpg" not in raw.split("://", 1)[0]:
+    effective = normalize_database_url(raw)
+    if effective.startswith("postgresql://") and "+asyncpg" not in effective.split("://", 1)[0]:
         return (
             "DATABASE_URL must use the async driver prefix postgresql+asyncpg:// (not postgresql:// alone). "
             "Example: postgresql+asyncpg://postgres:PASSWORD@db.xxx.supabase.co:5432/postgres?ssl=require"
