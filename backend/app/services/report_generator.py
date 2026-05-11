@@ -39,8 +39,7 @@ def write_summary_report(path: Path, payload: dict[str, Any]) -> None:
             [["No", "—", "No tabular export available for this result type.", ""]],
         )
 
-    pdf_part = comparison.get("pdf_report") if isinstance(comparison.get("pdf_report"), dict) else {}
-    vmx = pdf_part.get("value_mismatch_excel") if isinstance(pdf_part.get("value_mismatch_excel"), dict) else {}
+    vmx = comparison.get("value_mismatch_excel") if isinstance(comparison.get("value_mismatch_excel"), dict) else {}
 
     workbook = xlsxwriter.Workbook(str(path))
 
@@ -80,6 +79,42 @@ def write_summary_report(path: Path, payload: dict[str, Any]) -> None:
             for c, val in enumerate(row):
                 if c < len(field_headers):
                     ws_fd.write(r, c, val)
+
+    llm_id = comparison.get("llm_discrepancy_identification")
+    if isinstance(llm_id, dict) and (
+        llm_id.get("findings")
+        or llm_id.get("material_level_summary")
+        or llm_id.get("limitations")
+        or llm_id.get("raw_model_excerpt")
+    ):
+        ws_llm = workbook.add_worksheet("LLM discrepancies")
+        ws_llm.write(0, 0, "Category")
+        ws_llm.write(0, 1, "Severity")
+        ws_llm.write(0, 2, "Title")
+        ws_llm.write(0, 3, "Detail")
+        ws_llm.write(0, 4, "Evidence refs")
+        r = 1
+        for f in llm_id.get("findings") or []:
+            if not isinstance(f, dict):
+                continue
+            refs = f.get("evidence_refs") or []
+            ref_s = "; ".join(str(x) for x in refs) if isinstance(refs, list) else str(refs)
+            ws_llm.write(r, 0, str(f.get("category", "")))
+            ws_llm.write(r, 1, str(f.get("severity", "")))
+            ws_llm.write(r, 2, str(f.get("title", "")))
+            ws_llm.write(r, 3, str(f.get("detail", "")))
+            ws_llm.write(r, 4, ref_s[:32000])
+            r += 1
+        r += 1
+        ws_llm.write(r, 0, "Material-level summary (model)")
+        for line in llm_id.get("material_level_summary") or []:
+            r += 1
+            ws_llm.write(r, 0, str(line))
+        if llm_id.get("limitations"):
+            r += 1
+            ws_llm.write(r, 0, "Limitations")
+            r += 1
+            ws_llm.write(r, 0, str(llm_id.get("limitations")))
 
     ws_sum = workbook.add_worksheet("Summary")
     row = 0

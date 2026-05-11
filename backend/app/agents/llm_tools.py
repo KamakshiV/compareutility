@@ -17,6 +17,7 @@ _DEFAULT_PURPOSE_FOR_STAGE: dict[str, str] = {
     "schema_profiler": "schema and comparison-mode profiling",
     "mapping": "column mapping guidance",
     "rules": "reconciliation rules explanation",
+    "discrepancy_id": "LLM discrepancy identification from reconciliation evidence",
     "insight": "comparison result summarization",
     "pipeline": "pipeline LLM step",
 }
@@ -61,15 +62,19 @@ def pipeline_llm_complete(
     chat_model_id: Optional[str] = None,
 ) -> Optional[str]:
     """
-    When USE_LLM_SUMMARY is false: return None (callers omit LLM-enriched fields).
+    When neither USE_LLM_SUMMARY nor (for stage ``discrepancy_id``) USE_LLM_DISCREPANCY_IDENTIFICATION is enabled:
+    return None (callers omit LLM-enriched fields).
 
-    When true: return model text, or a short skip/error string (never raises).
+    When allowed: return model text, or a short skip/error string (never raises).
 
     ``purpose`` is the human-facing LLM service name in logs; defaults by ``stage``.
     """
     s = get_settings()
     svc_purpose = _resolve_purpose(stage, purpose)
-    if not s.use_llm_summary:
+    llm_allowed = s.use_llm_summary or (
+        stage == "discrepancy_id" and s.use_llm_discrepancy_identification
+    )
+    if not llm_allowed:
         return None
     if not s.openai_api_key:
         logger.info(

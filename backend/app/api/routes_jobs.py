@@ -3,11 +3,13 @@ from datetime import datetime
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.database import AsyncSessionLocal, get_db
+from app.db.job_repository import get_job
 from app.db.models import ComparisonJob, FileKind, JobStatus, UploadedFile
 from app.constants.openai_models import DEFAULT_OPENAI_CHAT_MODEL, OPENAI_CHAT_MODEL_IDS
 from app.models.schemas import CreateJobRequest, JobOut, OpenaiModelOptionsOut
@@ -18,7 +20,7 @@ from app.workers.comparison_job import run_comparison_job
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
-_TABULAR = {FileKind.xlsx, FileKind.xls, FileKind.sap}
+_EXCEL = {FileKind.xlsx, FileKind.xls}
 _ALLOWED_MODELS = frozenset(OPENAI_CHAT_MODEL_IDS)
 
 
@@ -38,12 +40,10 @@ def _normalize_job_openai_model(raw: Optional[str]) -> Optional[str]:
 
 async def _validate_key_fields(body: CreateJobRequest, files: list[UploadedFile]) -> Optional[list[str]]:
     kinds = {f.kind for f in files}
-    if kinds <= {FileKind.pdf}:
-        return None
-    if not kinds.issubset(_TABULAR):
+    if not kinds.issubset(_EXCEL):
         raise HTTPException(
             status_code=400,
-            detail="All files must be the same supported type (Excel, SAP export, or PDF).",
+            detail="All files must be Excel (.xlsx / .xlsm) or legacy .xls.",
         )
     if len(files) != 2:
         raise HTTPException(
@@ -53,7 +53,7 @@ async def _validate_key_fields(body: CreateJobRequest, files: list[UploadedFile]
     if not body.key_field_names:
         raise HTTPException(
             status_code=400,
-            detail="Select at least one key column for Excel or SAP exports (use GET /files/{id}/columns).",
+            detail="Select at least one key column (use GET /files/{id}/columns).",
         )
     keys: list[str] = []
     for x in body.key_field_names:
@@ -87,9 +87,6 @@ async def _validate_narrative_fields(
     keys: Optional[list[str]],
 ) -> Optional[list[str]]:
     """Columns used in export wording; defaults to key columns when omitted."""
-    kinds = {f.kind for f in files}
-    if kinds <= {FileKind.pdf}:
-        return None
     raw = body.narrative_field_names
     ordered: list[str] = []
     if raw:
@@ -197,6 +194,26 @@ def _job_to_out(job: ComparisonJob) -> JobOut:
         created_at=job.created_at,
         updated_at=job.updated_at,
         file_ids=file_ids_for_compare(job),
+    )
+
+
+@router.get("/{job_id}/report")
+async def download_excel_report(
+    job_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Download the generated Excel workbook (Export, By record, Field deltas, Summary)."""
+    job = await get_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not job.report_storage_key:
+        raise HTTPException(status_code=404, detail="No report yet")
+
+    storage = get_storage()
+    data = await storage.read_bytes(job.report_storage_key)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 

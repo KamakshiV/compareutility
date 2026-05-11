@@ -15,8 +15,8 @@ from app.db.base import Base
 class FileKind(str, enum.Enum):
     xlsx = "xlsx"
     xls = "xls"
-    pdf = "pdf"
-    sap = "sap"
+    pdf = "pdf"  # legacy DB rows only; uploads no longer accept PDF
+    sap = "sap"  # legacy DB rows only; uploads no longer accept SAP JSON
     unknown = "unknown"
 
 
@@ -57,9 +57,9 @@ class ComparisonJob(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     result_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     report_storage_key: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
-    # Composite business key for tabular reconciliation (Excel / SAP); ignored for PDF jobs
+    # Composite business key for Excel reconciliation
     key_field_names: Mapped[Optional[list[str]]] = mapped_column(JSONB, nullable=True)
-    # Columns used to phrase export/PDF narratives (e.g. document number); ignored for PDF jobs
+    # Columns used to phrase export narratives (e.g. document number)
     narrative_field_names: Mapped[Optional[list[str]]] = mapped_column(JSONB, nullable=True)
     # Request order of file_ids (File A first, File B second for spreadsheets). If null (legacy rows),
     # workers fall back to sorting uploads by created_at.

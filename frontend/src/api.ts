@@ -169,7 +169,3 @@ export async function getJob(id: string): Promise<Job> {
 export function reportUrl(jobId: string): string {
   return `${API_BASE}/jobs/${jobId}/report`
 }
-
-export function exportPdfUrl(jobId: string): string {
-  return `${API_BASE}/jobs/${jobId}/export.pdf`
-}

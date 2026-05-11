@@ -1,6 +1,6 @@
 # Reconiq
 
-POC application to compare **two or more** files (Excel, PDF, or SAP tabular exports) with a **FastAPI** backend, **LangGraph** orchestration, optional **OpenAI / Azure OpenAI** narrative, and a **React** UI.
+POC application to compare **two Excel workbooks** (File A → File B) with a **FastAPI** backend, **LangGraph** orchestration, optional **OpenAI / Azure OpenAI** narrative, and a **React** UI.
 
 ## Stack (as implemented)
 
@@ -10,8 +10,7 @@ POC application to compare **two or more** files (Excel, PDF, or SAP tabular exp
 | API | Python FastAPI |
 | Agents | LangGraph |
 | LLM | OpenAI or Azure OpenAI (optional) |
-| Excel | Polars + DuckDB |
-| PDF | PyMuPDF + pdfplumber |
+| Excel | Polars + openpyxl / xlrd |
 | Reports | xlsxwriter |
 | Storage | Local disk (default) or Azure Blob |
 | Metadata | PostgreSQL |
@@ -24,8 +23,7 @@ backend/app/
 ├── main.py                 # FastAPI entry
 ├── api/
 │   ├── routes_upload.py    # file upload API
-│   ├── routes_jobs.py      # comparison jobs API
-│   ├── routes_reports.py   # Excel report download
+│   ├── routes_jobs.py      # jobs + Excel report download (`GET /jobs/{id}/report`)
 │   └── routes_health.py
 ├── agents/                 # LangGraph orchestration
 │   ├── graph.py            # state machine wiring
@@ -34,12 +32,13 @@ backend/app/
 │   ├── mapping_agent.py
 │   ├── rule_agent.py
 │   ├── execution_controller_agent.py
+│   ├── discrepancy_identification_agent.py
 │   ├── insight_agent.py
 │   └── report_narration_agent.py
 ├── services/               # connectors + deterministic engine + reports
 │   ├── excel_parser.py
-│   ├── pdf_parser.py
 │   ├── reconciliation_engine.py
+│   ├── reconciliation_analysis.py
 │   ├── report_generator.py
 │   ├── storage_service.py
 │   └── …
@@ -209,11 +208,9 @@ npm run dev
 
 ## File types
 
-- **Excel**: `.xlsx` / `.xls` — first sheet is loaded; **File A → File B** key-based compare (first uploaded file is A, second is B). Exactly **two** spreadsheet files per job.
-- **PDF**: text extraction (PyMuPDF) plus optional pdfplumber sample; unified diff of line-oriented text.
-- **SAP (POC)**: upload JSON exports with shape `{"columns": [...], "rows": [[...], ...]}` and set form field **kind override** to `sap` (extension alone is not enough).
+- **Excel**: `.xlsx` / `.xlsm` / `.xls` — first sheet is loaded; **File A → File B** key-based compare (first uploaded file is A, second is B). Exactly **two** files per job.
 
-## Keys and narrative labels (Excel / SAP)
+## Keys and narrative labels
 
 Upload **exactly two** files: **File A** (baseline, first in upload order) and **File B** (second).
 
@@ -232,29 +229,23 @@ The UI loads headers from `GET /files/{file_id}/columns` (first file). Example j
 
 If `narrative_field_names` is omitted, the API defaults it to `key_field_names`.
 
-**PDF-only** jobs omit both lists. Every selected column name must exist in **both** files.
+Every selected column name must exist in **both** files.
 
-Compare is **one-way** (A → B): keys present only in B are not listed. Value-mismatch logic (PDF §4.2) uses only keys that appear **exactly once** in each file.
+Compare is **one-way** (A → B): keys present only in B are not listed. Value-mismatch logic uses only keys that appear **exactly once** in each file.
 
-## Export format (Excel + PDF)
+## Export format (Excel)
 
-Successful jobs expose:
+Successful jobs expose **Excel** (`GET /jobs/{id}/report`): workbook with:
 
-- **Excel** (`GET /jobs/{id}/report`): workbook with:
-  - **Export** — `Issue`, **Category** (`Missing in File B` / `Value mismatch (same key)`), **Discrepancy** (uses **narrative fields** for the opening «…» label), then source columns (value-mismatch rows show **File A** values).
-  - **By record** — narrative label, technical record key, field count, and summary text.
-  - **Field deltas** — one row per differing field (aligned with PDF §4.2): label from narrative columns, field name, File A / File B values, variance, category.
-  - **Summary** — JSON metadata (`tabular_export` is summarized by row count to avoid duplication).
-
-- **PDF discrepancy report** (`GET /jobs/{id}/export.pdf`) for spreadsheets:
-  - **4.1 Missing in File B** — File A rows whose key does not appear in File B.
-  - **4.2 Value mismatch** — same key once per file, differing non-key fields; the first column is built from **narrative fields**.
-
-Document **PDF** comparisons (scanned/text PDFs) use a single **Text comparison** section built from the line-level diff (no spreadsheet schema).
+- **Export** — `Issue`, **Category** (`Missing in File B` / `Value mismatch (same key)`), **Discrepancy** (uses **narrative fields** for the opening «…» label), then source columns (value-mismatch rows show **File A** values).
+- **By record** — narrative label, technical record key, field count, and summary text.
+- **Field deltas** — one row per differing field: label from narrative columns, field name, File A / File B values, variance, category.
+- **LLM discrepancies** — when `USE_LLM_DISCREPANCY_IDENTIFICATION` is enabled, structured model findings (if any).
+- **Summary** — JSON metadata (`tabular_export` is summarized by row count to avoid duplication).
 
 If more than two spreadsheet files are attached to a job, **only the first two** are compared; see `files_ignored_note` in the comparison JSON when applicable.
 
-Row caps: `MAX_EXPORT_ROWS` / `MAX_PDF_SECTION_ROWS` in `app/services/export_tabular.py` and `app/services/tabular_pdf_sections.py`.
+Row cap: `MAX_EXPORT_ROWS` in `app/services/export_tabular.py`; value-mismatch field rows cap in `app/services/reconciliation_analysis.py`.
 
 ## Optional: LLM summary
 
@@ -268,7 +259,7 @@ When enabled, the **LangGraph** pipeline calls the model at several stages (advi
 | Stage | Output field | Role |
 | --- | --- | --- |
 | Ingestion | `ingest_notes.llm_notes` | Quick checks on file pairing and readiness |
-| Schema profiler | `schema_profile.llm_notes` | POC limitations for Excel / PDF / SAP |
+| Schema profiler | `schema_profile.llm_notes` | POC limitations for Excel (first sheet) |
 | Mapping | `column_mapping.llm_notes` | Risks around keys and same-name columns |
 | Rules | `recommended_rules.llm_notes` | How to read policy metadata and edge cases |
 | Insight | `llm_summary` (job JSON) | Executive bullets over the full comparison result |
@@ -287,7 +278,7 @@ Set `AZURE_STORAGE_CONNECTION_STRING` and `AZURE_CONTAINER_NAME` in `backend/.en
 
 - Swap `BackgroundTasks` for **Celery + Redis** (Redis service is already in `docker-compose.yml`).
 - Add Alembic migrations instead of `create_all` on startup.
-- Harden SAP integration (HANA client, RFC, or governed ODBC) instead of JSON exports.
+- Optional: second-sheet / multi-sheet Excel, or CSV ingestion, as product needs grow.
 # compareutility
 
 If you ever need to start from scratch (3 terminals)

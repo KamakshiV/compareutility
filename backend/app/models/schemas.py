@@ -13,11 +13,11 @@ class CreateJobRequest(BaseModel):
     file_ids: list[uuid.UUID] = Field(min_length=2)
     key_field_names: Optional[list[str]] = Field(
         default=None,
-        description="Column names that uniquely identify a record (Excel / SAP).",
+        description="Column names that uniquely identify a record (Excel).",
     )
     narrative_field_names: Optional[list[str]] = Field(
         default=None,
-        description="Columns used for export/PDF wording, e.g. document number (Excel / SAP).",
+        description="Columns used for export wording, e.g. document number (Excel).",
     )
     openai_model: Optional[str] = Field(
         default=None,

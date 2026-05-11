@@ -16,7 +16,7 @@ def run(state: ReconcileState) -> dict:
         return {}
     profile = state.get("schema_profile") or {}
     mode = profile.get("comparison_mode", "unknown")
-    is_tabular = mode in ("tabular_duckdb", "tabular_json")
+    is_tabular = mode in ("tabular_duckdb", "tabular_json", "excel_first_sheet")
     rules = {
         "row_identity": "composite_key" if is_tabular else "na",
         "diff_policy": (

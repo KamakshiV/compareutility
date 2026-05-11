@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import routes_health, routes_jobs, routes_reports, routes_upload
+from app.api import routes_health, routes_jobs, routes_upload
 from app.config import get_settings
 from app.db.base import Base
 from app.db.database import engine
@@ -102,7 +102,6 @@ app.add_middleware(
 app.include_router(routes_health.router)
 app.include_router(routes_upload.router)
 app.include_router(routes_jobs.router)
-app.include_router(routes_reports.router)
 
 
 @app.get("/")

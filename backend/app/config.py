@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     openai_deployment_name: Optional[str] = None  # Azure deployment name
 
     use_llm_summary: bool = False  # env: USE_LLM_SUMMARY
+    # Structured LLM discrepancy pass (post-reconciliation); can be on without USE_LLM_SUMMARY
+    use_llm_discrepancy_identification: bool = False  # env: USE_LLM_DISCREPANCY_IDENTIFICATION
 
     # Comma-separated origins for browser clients (add your Vercel preview / production URL).
     # Include every origin you open the UI from (port matters): Vite dev 5173, preview 4173, LAN IPs, etc.

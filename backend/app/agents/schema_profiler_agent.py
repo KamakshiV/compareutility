@@ -20,19 +20,19 @@ def run(state: ReconcileState) -> dict:
         return {"schema_profile": {}, "error": "No kinds provided"}
     kinds = [FileKind(k) for k in kinds_raw]
     dominant = kinds[0].value if kinds else "unknown"
-    mode = "tabular_duckdb" if dominant in ("xlsx", "xls") else "text_diff" if dominant == "pdf" else "tabular_json"
+    mode = "excel_first_sheet" if dominant in ("xlsx", "xls") else "unknown"
     profile = {
         "dominant_kind": dominant,
         "kinds": [k.value for k in kinds],
         "comparison_mode": mode,
-        "notes": "POC: Excel uses first sheet only; PDF uses extracted text lines.",
+        "notes": "Excel-only: first sheet is compared; column matching is by header name.",
     }
     llm = pipeline_llm_complete(
         "You profile data sources for reconciliation. Be concise.",
         "Schema profile (deterministic):\n"
         + str(profile)
-        + "\n\nIn 4-6 bullets, explain limitations and caveats of this POC setup for this kind "
-        "(e.g. first sheet only, text PDFs vs scanned, SAP JSON shape). No generic filler.",
+        + "\n\nIn 4-6 bullets, explain limitations and caveats of this Excel-first-sheet setup "
+        "(e.g. hidden sheets ignored, merged cells, duplicate headers). No generic filler.",
         stage="schema_profiler",
         max_user_chars=3000,
         chat_model_id=state.get("openai_model"),

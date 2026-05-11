@@ -10,8 +10,9 @@ import polars as pl
 from app.services.excel_parser import read_excel_dataframe
 from app.services.export_tabular import MAX_EXPORT_ROWS, make_export, single_row_export
 from app.services.key_fields import coerce_key_fields, normalize_narrative_columns
-from app.services.tabular_pdf_sections import (
-    build_tabular_pdf_report,
+from app.services.discrepancy_categories import compute_descriptive_discrepancies
+from app.services.reconciliation_analysis import (
+    build_value_mismatch_excel_block,
     compute_value_mismatch_analysis,
     discrepancy_missing_in_b_row,
     row_key_tuple,
@@ -106,17 +107,9 @@ def compare_excel_files(
         "value_mismatch_records_1_1": len(vm.by_record),
         "sample_missing_in_b": missing_in_b.head(5).to_dicts() if len(missing_in_b) else [],
     }
-    logging.info("Build PDF Report")
-    pdf_report = build_tabular_pdf_report(
-        paths_eff[0].name,
-        paths_eff[1].name,
-        da,
-        db,
-        missing_in_b,
-        keys,
-        narrative_cols,
-        vm_analysis=vm,
-    )
+    summary["value_mismatch_excel"] = build_value_mismatch_excel_block(vm, keys, narrative_cols)
+    descriptive = compute_descriptive_discrepancies(da, db, keys, missing_in_b, vm)
+    summary["descriptive_discrepancies"] = descriptive
 
     export_rows: list[list[Any]] = []
     truncated = False
@@ -162,5 +155,4 @@ def compare_excel_files(
     else:
         summary["tabular_export"] = make_export(cols, export_rows, truncated=truncated)
 
-    summary["pdf_report"] = pdf_report
     return summary

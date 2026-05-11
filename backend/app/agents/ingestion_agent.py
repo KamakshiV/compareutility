@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any, Optional
@@ -14,7 +13,7 @@ from app.services.column_preview import list_columns_from_path
 
 log = logging.getLogger(__name__)
 
-_TABULAR_KINDS = frozenset({FileKind.xlsx.value, FileKind.xls.value, FileKind.sap.value})
+_EXCEL_KINDS = frozenset({FileKind.xlsx.value, FileKind.xls.value})
 
 
 def _column_schema_check(paths: list[str], kinds: list[str]) -> tuple[Optional[str], dict[str, Any]]:
@@ -25,7 +24,7 @@ def _column_schema_check(paths: list[str], kinds: list[str]) -> tuple[Optional[s
     if len(paths) < 2 or len(kinds) < 2:
         return None, {}
     k0, k1 = kinds[0], kinds[1]
-    if k0 not in _TABULAR_KINDS or k1 not in _TABULAR_KINDS:
+    if k0 not in _EXCEL_KINDS or k1 not in _EXCEL_KINDS:
         return None, {"column_schema_check": {"skipped": True, "reason": "non_tabular_or_unsupported_kind"}}
     if k0 != k1:
         return None, {
@@ -39,7 +38,7 @@ def _column_schema_check(paths: list[str], kinds: list[str]) -> tuple[Optional[s
         kind = FileKind(k0)
         cols_a = list_columns_from_path(Path(paths[0]), kind)
         cols_b = list_columns_from_path(Path(paths[1]), kind)
-    except (OSError, ValueError, KeyError, json.JSONDecodeError) as e:
+    except (OSError, ValueError, KeyError) as e:
         msg = f"Could not read tabular headers for schema check: {e}"
         log.warning(msg)
         return msg, {"column_schema_check": {"error": str(e)}}

@@ -23,31 +23,17 @@ def slim_comparison_for_llm(comparison: dict[str, Any]) -> dict[str, Any]:
             "note": "Row data omitted here for speed; see job Export / Excel report.",
         }
 
-    pr = out.get("pdf_report")
-    if isinstance(pr, dict):
-        pr_slim = dict(pr)
-        secs = pr_slim.get("sections")
-        if isinstance(secs, list):
-            pr_slim["sections"] = []
-            for sec in secs:
-                if not isinstance(sec, dict):
-                    continue
-                s = {k: v for k, v in sec.items() if k != "rows"}
-                rows = sec.get("rows") or []
-                s["row_count"] = len(rows) if isinstance(rows, list) else 0
-                pr_slim["sections"].append(s)
-        vm = pr_slim.get("value_mismatch_excel")
-        if isinstance(vm, dict):
-            vm2 = dict(vm)
-            fr = vm2.get("field_rows")
-            if isinstance(fr, list) and len(fr) > 200:
-                vm2["field_rows"] = fr[:200]
-                vm2["field_rows_truncated"] = len(fr) - 200
-            br = vm2.get("by_record")
-            if isinstance(br, list) and len(br) > 200:
-                vm2["by_record"] = br[:200]
-                vm2["by_record_truncated"] = len(br) - 200
-            pr_slim["value_mismatch_excel"] = vm2
-        out["pdf_report"] = pr_slim
+    vm = out.get("value_mismatch_excel")
+    if isinstance(vm, dict):
+        vm2 = dict(vm)
+        fr = vm2.get("field_rows")
+        if isinstance(fr, list) and len(fr) > 200:
+            vm2["field_rows"] = fr[:200]
+            vm2["field_rows_truncated"] = len(fr) - 200
+        br = vm2.get("by_record")
+        if isinstance(br, list) and len(br) > 200:
+            vm2["by_record"] = br[:200]
+            vm2["by_record_truncated"] = len(br) - 200
+        out["value_mismatch_excel"] = vm2
 
     return out

@@ -11,6 +11,7 @@ from typing import Any, Literal, Optional
 from langgraph.graph import END, StateGraph
 
 from . import (
+    discrepancy_identification_agent,
     execution_controller_agent,
     ingestion_agent,
     insight_agent,
@@ -44,6 +45,7 @@ def build_graph():
     g.add_node("mapping", _wrap(mapping_agent.run))
     g.add_node("rule_recommendation", _wrap(rule_agent.run))
     g.add_node("execution", _wrap(execution_controller_agent.run))
+    g.add_node("discrepancy_identification", _wrap(discrepancy_identification_agent.run))
     g.add_node("insight", _wrap(insight_agent.run))
     g.add_node("report_narration", _wrap(report_narration_agent.run))
 
@@ -53,16 +55,22 @@ def build_graph():
     g.add_edge("mapping", "rule_recommendation")
     g.add_edge("rule_recommendation", "execution")
 
-    def route_after_execution(state: ReconcileState) -> Literal["insight", "report_narration"]:
+    def route_after_execution(
+        state: ReconcileState,
+    ) -> Literal["discrepancy_identification", "report_narration"]:
         if state.get("error"):
             return "report_narration"
-        return "insight"
+        return "discrepancy_identification"
 
     g.add_conditional_edges(
         "execution",
         route_after_execution,
-        {"insight": "insight", "report_narration": "report_narration"},
+        {
+            "discrepancy_identification": "discrepancy_identification",
+            "report_narration": "report_narration",
+        },
     )
+    g.add_edge("discrepancy_identification", "insight")
     g.add_edge("insight", "report_narration")
     g.add_edge("report_narration", END)
     return g.compile()

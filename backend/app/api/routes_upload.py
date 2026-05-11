@@ -16,6 +16,8 @@ from app.services.storage_service import StoredBlobMissingError, get_storage
 
 router = APIRouter(prefix="/files", tags=["files"])
 
+_EXCEL_KINDS = frozenset({FileKind.xlsx, FileKind.xls})
+
 
 @router.post("", response_model=UploadedFileOut)
 async def upload_file(
@@ -34,9 +36,17 @@ async def upload_file(
     kind = detect_kind(file.filename or "")
     if kind_override:
         try:
-            kind = FileKind(kind_override)
+            ko = FileKind(kind_override.strip().lower())
         except ValueError:
-            kind = detect_kind(file.filename or "")
+            ko = None
+        if ko in _EXCEL_KINDS:
+            kind = ko
+
+    if kind not in _EXCEL_KINDS:
+        raise HTTPException(
+            status_code=400,
+            detail="Only Excel workbooks are supported (.xlsx, .xlsm, or .xls).",
+        )
 
     row = UploadedFile(original_name=file.filename or key, storage_key=key, kind=kind)
     db.add(row)
@@ -55,14 +65,12 @@ async def get_file(file_id: uuid.UUID, db: Annotated[AsyncSession, Depends(get_d
 
 @router.get("/{file_id}/columns", response_model=FileColumnsOut)
 async def get_file_columns(file_id: uuid.UUID, db: Annotated[AsyncSession, Depends(get_db)]):
-    """Header columns for Excel / SAP exports (for choosing record keys before running a job)."""
+    """Header columns for Excel uploads (for choosing record keys before running a job)."""
     row = await get_uploaded_file(db, file_id)
     if row is None:
         raise HTTPException(status_code=404, detail="File not found")
-    if row.kind == FileKind.pdf:
-        raise HTTPException(status_code=400, detail="PDF uploads have no tabular column headers")
-    if row.kind == FileKind.unknown:
-        raise HTTPException(status_code=400, detail="Cannot detect columns for unknown file kind")
+    if row.kind not in _EXCEL_KINDS:
+        raise HTTPException(status_code=400, detail="Column preview is only available for Excel files")
     storage = get_storage()
     try:
         cols = await list_columns_from_upload(storage, row.storage_key, row.original_name, row.kind)
