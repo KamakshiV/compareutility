@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   createJob,
+  exportPdfUrl,
   getFileColumns,
   getJob,
   getOpenaiModelOptions,
@@ -397,10 +398,15 @@ function App() {
               {job.result_json && (
                 <pre className="json">{JSON.stringify(job.result_json, null, 2)}</pre>
               )}
-              {job.status === 'succeeded' && job.report_storage_key && (
+              {job.status === 'succeeded' && (
                 <p className="downloads">
-                  <a className="download" href={reportUrl(job.id)} target="_blank" rel="noreferrer">
-                    Download Excel report
+                  {job.report_storage_key && (
+                    <a className="download" href={reportUrl(job.id)} target="_blank" rel="noreferrer">
+                      Download Excel report
+                    </a>
+                  )}
+                  <a className="download" href={exportPdfUrl(job.id)} target="_blank" rel="noreferrer">
+                    Download PDF report
                   </a>
                 </p>
               )}

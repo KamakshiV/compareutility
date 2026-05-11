@@ -11,7 +11,7 @@ POC application to compare **two Excel workbooks** (File A → File B) with a **
 | Agents | LangGraph |
 | LLM | OpenAI or Azure OpenAI (optional) |
 | Excel | Polars + openpyxl / xlrd |
-| Reports | xlsxwriter |
+| Reports | xlsxwriter + ReportLab (PDF) |
 | Storage | Local disk (default) or Azure Blob |
 | Metadata | PostgreSQL |
 | Jobs | FastAPI `BackgroundTasks` (POC) |
@@ -23,7 +23,7 @@ backend/app/
 ├── main.py                 # FastAPI entry
 ├── api/
 │   ├── routes_upload.py    # file upload API
-│   ├── routes_jobs.py      # jobs + Excel report download (`GET /jobs/{id}/report`)
+│   ├── routes_jobs.py      # jobs + Excel (`/report`) + PDF (`/export.pdf`) downloads
 │   └── routes_health.py
 ├── agents/                 # LangGraph orchestration
 │   ├── graph.py            # state machine wiring
@@ -39,6 +39,8 @@ backend/app/
 │   ├── excel_parser.py
 │   ├── reconciliation_engine.py
 │   ├── reconciliation_analysis.py
+│   ├── excel_pdf_sections.py
+│   ├── pdf_discrepancy_report.py
 │   ├── report_generator.py
 │   ├── storage_service.py
 │   └── …
@@ -233,19 +235,16 @@ Every selected column name must exist in **both** files.
 
 Compare is **one-way** (A → B): keys present only in B are not listed. Value-mismatch logic uses only keys that appear **exactly once** in each file.
 
-## Export format (Excel)
+## Export format (Excel + PDF)
 
-Successful jobs expose **Excel** (`GET /jobs/{id}/report`): workbook with:
+Successful jobs expose:
 
-- **Export** — `Issue`, **Category** (`Missing in File B` / `Value mismatch (same key)`), **Discrepancy** (uses **narrative fields** for the opening «…» label), then source columns (value-mismatch rows show **File A** values).
-- **By record** — narrative label, technical record key, field count, and summary text.
-- **Field deltas** — one row per differing field: label from narrative columns, field name, File A / File B values, variance, category.
-- **LLM discrepancies** — when `USE_LLM_DISCREPANCY_IDENTIFICATION` is enabled, structured model findings (if any).
-- **Summary** — JSON metadata (`tabular_export` is summarized by row count to avoid duplication).
+- **Excel** (`GET /jobs/{id}/report`): workbook with **Export**, **By record**, **Field deltas**, optional **LLM discrepancies**, and **Summary** (JSON metadata).
+- **PDF** (`GET /jobs/{id}/export.pdf`): ReportLab document with material / itemized summary sections, **Missing in File B**, **Value mismatch**, and (when LLM discrepancy ID is enabled) an **LLM-identified discrepancies** section at the top.
 
 If more than two spreadsheet files are attached to a job, **only the first two** are compared; see `files_ignored_note` in the comparison JSON when applicable.
 
-Row cap: `MAX_EXPORT_ROWS` in `app/services/export_tabular.py`; value-mismatch field rows cap in `app/services/reconciliation_analysis.py`.
+Row caps: `MAX_EXPORT_ROWS` in `app/services/export_tabular.py`; PDF table body rows per section capped in `app/services/pdf_discrepancy_report.py` and `app/services/excel_pdf_sections.py`; value-mismatch field rows cap in `app/services/reconciliation_analysis.py`.
 
 ## Optional: LLM summary
 

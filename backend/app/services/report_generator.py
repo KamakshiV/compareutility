@@ -40,6 +40,11 @@ def write_summary_report(path: Path, payload: dict[str, Any]) -> None:
         )
 
     vmx = comparison.get("value_mismatch_excel") if isinstance(comparison.get("value_mismatch_excel"), dict) else {}
+    if not vmx.get("field_rows") and not vmx.get("by_record"):
+        pdf_part = comparison.get("pdf_report") if isinstance(comparison.get("pdf_report"), dict) else {}
+        nested = pdf_part.get("value_mismatch_excel") if isinstance(pdf_part.get("value_mismatch_excel"), dict) else {}
+        if nested:
+            vmx = nested
 
     workbook = xlsxwriter.Workbook(str(path))
 

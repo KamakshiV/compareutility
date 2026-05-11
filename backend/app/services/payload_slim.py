@@ -36,4 +36,20 @@ def slim_comparison_for_llm(comparison: dict[str, Any]) -> dict[str, Any]:
             vm2["by_record_truncated"] = len(br) - 200
         out["value_mismatch_excel"] = vm2
 
+    pr = out.get("pdf_report")
+    if isinstance(pr, dict):
+        pr_slim = dict(pr)
+        secs = pr_slim.get("sections")
+        if isinstance(secs, list):
+            pr_slim["sections"] = []
+            for sec in secs:
+                if not isinstance(sec, dict):
+                    continue
+                s = {k: v for k, v in sec.items() if k != "rows"}
+                rows = sec.get("rows") or []
+                s["row_count"] = len(rows) if isinstance(rows, list) else 0
+                pr_slim["sections"].append(s)
+        pr_slim.pop("value_mismatch_excel", None)
+        out["pdf_report"] = pr_slim
+
     return out

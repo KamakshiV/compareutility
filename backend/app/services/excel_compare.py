@@ -11,6 +11,7 @@ from app.services.excel_parser import read_excel_dataframe
 from app.services.export_tabular import MAX_EXPORT_ROWS, make_export, single_row_export
 from app.services.key_fields import coerce_key_fields, normalize_narrative_columns
 from app.services.discrepancy_categories import compute_descriptive_discrepancies
+from app.services.excel_pdf_sections import build_excel_pdf_report
 from app.services.reconciliation_analysis import (
     build_value_mismatch_excel_block,
     compute_value_mismatch_analysis,
@@ -110,6 +111,19 @@ def compare_excel_files(
     summary["value_mismatch_excel"] = build_value_mismatch_excel_block(vm, keys, narrative_cols)
     descriptive = compute_descriptive_discrepancies(da, db, keys, missing_in_b, vm)
     summary["descriptive_discrepancies"] = descriptive
+
+    pdf_report = build_excel_pdf_report(
+        paths_eff[0].name,
+        paths_eff[1].name,
+        da,
+        missing_in_b,
+        keys,
+        narrative_cols,
+        vm_analysis=vm,
+        descriptive=descriptive,
+    )
+    pdf_report["value_mismatch_excel"] = summary["value_mismatch_excel"]
+    summary["pdf_report"] = pdf_report
 
     export_rows: list[list[Any]] = []
     truncated = False

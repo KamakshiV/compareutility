@@ -9,11 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.database import AsyncSessionLocal, get_db
-from app.db.job_repository import get_job
+from app.db.job_repository import get_job as fetch_job_row
 from app.db.models import ComparisonJob, FileKind, JobStatus, UploadedFile
 from app.constants.openai_models import DEFAULT_OPENAI_CHAT_MODEL, OPENAI_CHAT_MODEL_IDS
 from app.models.schemas import CreateJobRequest, JobOut, OpenaiModelOptionsOut
 from app.services.column_preview import list_columns_from_upload
+from app.services.pdf_discrepancy_report import render_discrepancy_pdf
 from app.services.storage_service import StoredBlobMissingError, get_storage
 from app.services.job_file_order import file_ids_for_compare
 from app.workers.comparison_job import run_comparison_job
@@ -203,7 +204,7 @@ async def download_excel_report(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Download the generated Excel workbook (Export, By record, Field deltas, Summary)."""
-    job = await get_job(db, job_id)
+    job = await fetch_job_row(db, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     if not job.report_storage_key:
@@ -214,6 +215,29 @@ async def download_excel_report(
     return Response(
         content=data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@router.get("/{job_id}/export.pdf")
+async def download_export_pdf(
+    job_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Structured reconciliation PDF (material summary, itemized categories, missing keys, value mismatch)."""
+    job = await fetch_job_row(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != JobStatus.succeeded:
+        raise HTTPException(status_code=404, detail="PDF export is only available for successful jobs")
+    comparison = (job.result_json or {}).get("comparison") or {}
+    pdf_payload = comparison.get("pdf_report")
+    if not isinstance(pdf_payload, dict) or not pdf_payload.get("sections"):
+        raise HTTPException(status_code=404, detail="No PDF report payload for this job")
+    pdf_bytes = render_discrepancy_pdf(pdf_payload)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="reconiq-job-{job_id}.pdf"'},
     )
 
 

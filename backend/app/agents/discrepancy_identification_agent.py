@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 _MAX_EVIDENCE_CHARS = 14000
 
-
+logging.info("Run Discrepancy Identification Agent")
 def _parse_json_object(text: str) -> Optional[dict[str, Any]]:
     if not text or not text.strip():
         return None
@@ -76,6 +76,52 @@ def _build_evidence(state: ReconcileState, comp: dict[str, Any]) -> dict[str, An
             "material_column_used": dd.get("material_column_used"),
         },
         "value_mismatch_records_sample": slim_records,
+    }
+
+
+def _llm_pdf_section_from_parsed(parsed: dict[str, Any]) -> dict[str, Any]:
+    rows: list[list[str]] = []
+    for f in (parsed.get("findings") or [])[:120]:
+        if not isinstance(f, dict):
+            continue
+        refs = f.get("evidence_refs") or []
+        ref_s = "; ".join(str(x) for x in refs) if isinstance(refs, list) else str(refs)
+        rows.append(
+            [
+                str(f.get("category", "")),
+                str(f.get("severity", "")),
+                str(f.get("title", "")),
+                str(f.get("detail", "")),
+                ref_s[:2000],
+            ]
+        )
+    mats = parsed.get("material_level_summary") or []
+    desc_parts = [
+        "Findings produced by an LLM from the structured reconciliation evidence in this job. "
+        "Use sections 3–4 tables as the authoritative row-level source."
+    ]
+    if isinstance(mats, list) and mats:
+        desc_parts.append("Material-level summary from model: " + " | ".join(str(x) for x in mats[:15]))
+    lim = parsed.get("limitations")
+    if lim:
+        desc_parts.append(f"Limitations: {lim}")
+
+    return {
+        "id": "2",
+        "title": "LLM-identified discrepancies (evidence-grounded)",
+        "description": " ".join(desc_parts),
+        "accent": "blue",
+        "headers": ["Category", "Severity", "Title", "Detail", "Evidence refs"],
+        "rows": rows
+        or [
+            [
+                "—",
+                "—",
+                "No structured findings",
+                "The model returned no parseable findings array; see job JSON for raw excerpt if present.",
+                "",
+            ]
+        ],
     }
 
 
@@ -147,4 +193,15 @@ def run(state: ReconcileState) -> dict[str, Any]:
     if parsed.get("raw_model_excerpt"):
         out["raw_model_excerpt"] = parsed.get("raw_model_excerpt")
 
-    return {"comparison_result": {**comp, "llm_discrepancy_identification": out}}
+    pdf = comp.get("pdf_report")
+    if isinstance(pdf, dict) and isinstance(pdf.get("sections"), list):
+        llm_sec = _llm_pdf_section_from_parsed(parsed)
+        comp = {
+            **comp,
+            "pdf_report": {**pdf, "sections": [llm_sec] + list(pdf["sections"])},
+            "llm_discrepancy_identification": out,
+        }
+    else:
+        comp = {**comp, "llm_discrepancy_identification": out}
+
+    return {"comparison_result": comp}
