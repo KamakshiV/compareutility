@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional, Union
 import logging
 import polars as pl
 
@@ -13,6 +13,7 @@ from app.services.key_fields import coerce_key_fields, normalize_narrative_colum
 from app.services.tabular_pdf_sections import (
     build_tabular_pdf_report,
     compute_value_mismatch_analysis,
+    discrepancy_missing_in_b_row,
     row_key_tuple,
 )
 
@@ -43,14 +44,15 @@ def _append_data_rows(
     cols: list[str],
     issue_val: str,
     category: str,
-    discrepancy: str,
+    discrepancy: Union[str, Callable[[dict[str, Any]], str]],
     budget: int,
 ) -> int:
     n = 0
     for d in df.head(budget).to_dicts():
         if len(rows_out) >= MAX_EXPORT_ROWS:
             break
-        rows_out.append([issue_val, category, discrepancy] + [_cell_value(d.get(c)) for c in cols])
+        disc = discrepancy(d) if callable(discrepancy) else discrepancy
+        rows_out.append([issue_val, category, disc] + [_cell_value(d.get(c)) for c in cols])
         n += 1
     return n
 
@@ -119,9 +121,9 @@ def compare_excel_files(
     export_rows: list[list[Any]] = []
     truncated = False
 
-    disc_miss = (
-        f"File A row («{pair_label}»): this record’s key does not appear in File B."
-    )
+    def _disc_missing(d: dict[str, Any]) -> str:
+        return discrepancy_missing_in_b_row(d, narrative_cols, pair_label=pair_label)
+
     remaining = MAX_EXPORT_ROWS - len(export_rows)
     if remaining > 0:
         used = _append_data_rows(
@@ -130,7 +132,7 @@ def compare_excel_files(
             cols,
             "Yes",
             "Missing in File B",
-            disc_miss,
+            _disc_missing,
             remaining,
         )
         if used < len(missing_in_b):

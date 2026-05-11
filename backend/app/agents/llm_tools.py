@@ -4,10 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Optional
-
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import AzureChatOpenAI, ChatOpenAI
+from typing import Any, Optional
 
 from app.config import get_settings
 
@@ -30,7 +27,10 @@ def _resolve_purpose(stage: str, purpose: Optional[str]) -> str:
     return _DEFAULT_PURPOSE_FOR_STAGE.get(stage, stage.replace("_", " "))
 
 
-def _chat_model() -> AzureChatOpenAI | ChatOpenAI:
+def _chat_model() -> Any:
+    """Load OpenAI/Azure client only when an LLM call is about to run."""
+    from langchain_openai import AzureChatOpenAI, ChatOpenAI
+
     s = get_settings()
     key = s.openai_api_key
     if not key:
@@ -84,6 +84,8 @@ def pipeline_llm_complete(
         len(system),
         len(body),
     )
+    from langchain_core.messages import HumanMessage, SystemMessage
+
     t0 = time.perf_counter()
     try:
         llm = _chat_model()

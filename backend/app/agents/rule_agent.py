@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+
 from app.agents.llm_tools import pipeline_llm_complete
 from app.agents.state import ReconcileState
 
+log = logging.getLogger(__name__)
+
 
 def run(state: ReconcileState) -> dict:
+    log.info("Run rule recommendation agent")
     if state.get("error"):
         return {}
     profile = state.get("schema_profile") or {}

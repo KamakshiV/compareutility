@@ -8,12 +8,16 @@ import uuid
 from pathlib import Path
 
 from app.db.models import FileKind
-from app.services.excel_parser import read_excel_dataframe
+from app.services.excel_parser import read_excel_column_names, read_excel_dataframe
 
 
 def list_columns_from_path(path: Path, kind: FileKind) -> list[str]:
     if kind in (FileKind.xlsx, FileKind.xls):
-        return [str(c) for c in read_excel_dataframe(path).columns]
+        if kind == FileKind.xlsx and path.suffix.lower() in (".xlsx", ".xlsm"):
+            return read_excel_column_names(path)
+        if kind == FileKind.xls:
+            return [str(c) for c in read_excel_dataframe(path).columns]
+        return read_excel_column_names(path)
     if kind == FileKind.sap:
         data = json.loads(path.read_text(encoding="utf-8"))
         cols = data.get("columns")

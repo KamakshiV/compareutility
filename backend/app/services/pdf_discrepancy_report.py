@@ -15,37 +15,55 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 _ACCENT_HEX = {"red": "#C0392B", "orange": "#E67E22"}
 
-_MIN_COL_PT = 34  # minimum width per narrow column (~0.47") so labels stay readable
+_MIN_NARROW_PT = 32  # generic numeric / short code columns
+_MIN_DOC_PT = 64  # Document, Document_item — avoid splitting IDs across lines
+_MIN_DATE_PT = 68  # delivery date, etc.
+_MIN_COMMENT_PT = 78  # Comments may wrap; floor keeps one short line readable
+
+
+def _col_weight_and_floor(header: str) -> tuple[float, float]:
+    """
+    Return (weight for extra width after floors, minimum width in pt).
+    Higher weight → more of the slack width after minimums are satisfied.
+    """
+    hl = str(header).strip().lower()
+    if hl == "comments":
+        return (0.85, float(_MIN_COMMENT_PT))
+    if "document" in hl:
+        return (2.5, float(_MIN_DOC_PT))
+    if "date" in hl:
+        return (2.4, float(_MIN_DATE_PT))
+    if "material" in hl:
+        return (1.6, float(_MIN_NARROW_PT + 8))
+    if any(x in hl for x in ("price", "value", "currency", "quantity", "qty", "uom")):
+        return (1.15, float(_MIN_NARROW_PT))
+    return (1.0, float(_MIN_NARROW_PT))
 
 
 def _column_widths_pt(headers: list[str], usable_pt: float) -> list[float]:
-    """Widen Comments vs equal split; keep widths summing to usable_pt."""
+    """
+    Widths sum to usable_pt. Document / date columns get higher floors and extra share;
+    Comments gets a modest floor so it wraps instead of stealing width from identifiers.
+    """
     n = len(headers)
     if n <= 0:
         return []
     if n == 1:
         return [usable_pt]
 
-    comments_idx = None
-    for i, h in enumerate(headers):
-        if str(h).strip().lower() == "comments":
-            comments_idx = i
+    meta = [_col_weight_and_floor(h) for h in headers]
+    floors = [m[1] for m in meta]
+    weights = [m[0] for m in meta]
+    floor_sum = sum(floors)
+    if floor_sum >= usable_pt:
+        # Too many columns / wide floors: scale floors down uniformly
+        scale = usable_pt / floor_sum
+        return [f * scale for f in floors]
 
-    equal = usable_pt / n
-    if comments_idx is None:
-        return [equal] * n
-
-    # Aim for Comments ≈ max(2× equal share, 26% of row); cap so others stay ≥ _MIN_COL_PT.
-    comments_target = min(max(equal * 2.2, usable_pt * 0.26), usable_pt * 0.45)
-    others_w = (usable_pt - comments_target) / (n - 1)
-    if others_w < _MIN_COL_PT:
-        others_w = _MIN_COL_PT
-        comments_target = usable_pt - others_w * (n - 1)
-    comments_target = max(comments_target, _MIN_COL_PT)
-
-    out = [others_w] * n
-    out[comments_idx] = usable_pt - others_w * (n - 1)
-    return out
+    remaining = usable_pt - floor_sum
+    wsum = sum(weights)
+    extras = [(remaining * w / wsum) if wsum else remaining / n for w in weights]
+    return [floors[i] + extras[i] for i in range(n)]
 
 
 def _para_fragment(raw: str) -> str:

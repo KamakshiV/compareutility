@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from app.agents.state import ReconcileState
 
+log = logging.getLogger(__name__)
+
 
 def run(state: ReconcileState) -> dict[str, Any]:
+    log.info("Run report narration agent")
     if state.get("error"):
         insight = state.get("llm_insight")
         return {

@@ -17,6 +17,7 @@ from app.services.key_fields import coerce_key_fields, normalize_narrative_colum
 from app.services.tabular_pdf_sections import (
     build_tabular_pdf_report,
     compute_value_mismatch_analysis,
+    discrepancy_missing_in_b_row,
     row_key_tuple,
 )
 
@@ -104,11 +105,11 @@ def compare_sap_exports(
     export_rows: list[list[Any]] = []
     truncated = False
 
-    disc_miss = f"File A row («{pair_label}»): this record’s key does not appear in File B."
     for d in missing_in_b.head(MAX_EXPORT_ROWS).to_dicts():
         if len(export_rows) >= MAX_EXPORT_ROWS:
             truncated = True
             break
+        disc_miss = discrepancy_missing_in_b_row(d, narrative_cols, pair_label=pair_label)
         export_rows.append(["Yes", "Missing in File B", disc_miss] + [_cell_value(d.get(c)) for c in cols])
 
     cat_vm = "Value mismatch (same key)"

@@ -295,6 +295,38 @@
   cursor: not-allowed;
 }
 
+.run-actions-hint {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+.run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+}
+
+.secondary {
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--code-bg);
+  border-color: var(--muted);
+}
+
+.secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .error {
   margin-top: 1rem;
   color: var(--danger);
@@ -353,4 +385,93 @@
 
 .key-summary code {
   color: var(--text);
+}
+
+.toast-wrap {
+  position: fixed;
+  /* Below sticky site header (~4.5–5rem) so it reads as top-right of the main area */
+  top: max(5.25rem, calc(env(safe-area-inset-top, 0px) + 4.75rem));
+  right: max(1rem, env(safe-area-inset-right, 0px));
+  left: auto;
+  transform: none;
+  z-index: 1000;
+  width: min(420px, calc(100vw - 1.75rem));
+  pointer-events: none;
+}
+
+.toast-wrap .toast {
+  pointer-events: auto;
+  width: 100%;
+  max-width: min(420px, calc(100vw - 1.75rem));
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem 0.75rem 1rem;
+  border-radius: 10px;
+  background: #fee2e2;
+  border: 1px solid #f87171;
+  box-shadow: 0 6px 20px rgba(127, 29, 29, 0.12), 0 0 0 1px rgba(248, 113, 113, 0.2);
+  animation: toast-in 0.22s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-message {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: #7f1d1d;
+}
+
+.toast-dismiss {
+  flex-shrink: 0;
+  margin: -0.15rem -0.2rem 0 0;
+  padding: 0.15rem 0.45rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #991b1b;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.toast-dismiss:hover {
+  color: #450a0a;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  .toast {
+    background: rgba(127, 29, 29, 0.55);
+    border-color: #f87171;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .toast-message {
+    color: #fecaca;
+  }
+
+  .toast-dismiss {
+    color: #fecaca;
+  }
+
+  .toast-dismiss:hover {
+    color: #fff;
+    background: rgba(0, 0, 0, 0.2);
+  }
 }

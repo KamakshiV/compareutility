@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -34,14 +35,22 @@ async def run_comparison_job(db: AsyncSession, job_id: uuid.UUID) -> None:
 
     try:
         by_id = {uf.id: uf for uf in job.files}
-        for fid in file_ids_for_compare(job):
+        ordered_ids = file_ids_for_compare(job)
+
+        async def _download(fid: uuid.UUID) -> tuple[uuid.UUID, Path, object]:
             uf = by_id[fid]
             data = await storage.read_bytes(uf.storage_key)
             ext = Path(uf.original_name).suffix or ".bin"
             lp = tmp_dir / f"{uf.id}{ext}"
             lp.write_bytes(data)
+            return fid, lp, uf.kind
+
+        downloaded = await asyncio.gather(*[_download(fid) for fid in ordered_ids])
+        id_to_pair = {fid: (lp, k) for fid, lp, k in downloaded}
+        for fid in ordered_ids:
+            lp, k = id_to_pair[fid]
             local_paths.append(lp)
-            kinds.append(uf.kind)
+            kinds.append(k)
 
         graph_out = run_compare_graph(
             local_paths,

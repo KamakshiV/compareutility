@@ -54,6 +54,25 @@ def narrative_label_from_row(d: dict[str, Any], narrative_cols: list[str]) -> st
     return " | ".join(_cell_str(d.get(c)) for c in narrative_cols)
 
 
+def discrepancy_missing_in_b_row(
+    row: dict[str, Any],
+    narrative_cols: list[str],
+    *,
+    pair_label: str,
+) -> str:
+    """Export / Excel «Discrepancy» text for a File A row missing from File B (uses narrative when set)."""
+    lab = narrative_label_from_row(row, narrative_cols).strip()
+    if lab:
+        return (
+            f"File A record «{lab}»: this row’s composite key does not appear in File B "
+            f"(compare {pair_label})."
+        )
+    return (
+        f"File A row: composite key not found in File B ({pair_label}). "
+        "Choose narrative columns in the app to show a clearer record label here."
+    )
+
+
 def _format_record_summary(narrative_label: str, changes: list[dict[str, Any]]) -> str:
     """One readable sentence per record for Excel «Discrepancy» and the By record sheet."""
     lede = f"«{narrative_label}»" if narrative_label.strip() else "This record"
@@ -182,7 +201,11 @@ def build_tabular_pdf_report(
     headers_missing = list(cols) + ["Comments"]
     rows_b: list[list[Any]] = []
     for d in missing_in_b.head(MAX_PDF_SECTION_ROWS).to_dicts():
-        rows_b.append([_cell_str(d.get(c)) for c in cols] + ["Key from File A not found in File B"])
+        lab = narrative_label_from_row(d, narrative_field_names).strip()
+        comment = (
+            f"Not in File B — record «{lab}»" if lab else "Key from File A not found in File B"
+        )
+        rows_b.append([_cell_str(d.get(c)) for c in cols] + [comment])
 
     vm_key_header = f"Record ({narr_desc})" if narrative_field_names else f"Record key ({key_desc})"
     vm_headers = [vm_key_header, "Field", "File A value", "File B value", "Variance", "Category"]

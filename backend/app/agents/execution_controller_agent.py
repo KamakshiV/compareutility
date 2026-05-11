@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from app.agents.state import ReconcileState
 from app.db.models import FileKind
 from app.services.reconciliation_engine import run_reconciliation
 
+log = logging.getLogger(__name__)
+
 
 def run(state: ReconcileState) -> dict:
+    log.info("Run execution controller agent")
     if state.get("error"):
         return {}
     paths = [Path(p) for p in state["local_paths"]]

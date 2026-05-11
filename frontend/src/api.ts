@@ -17,6 +17,42 @@ function resolveApiBase(): string {
 
 const API_BASE = resolveApiBase()
 
+/**
+ * Turn FastAPI / JSON error bodies into a single line for users.
+ * e.g. `{"detail":"Column 'x' not found..."}` → human message (not raw JSON).
+ */
+export function formatApiErrorResponseBody(bodyText: string): string {
+  const raw = bodyText.trim()
+  if (!raw) return 'Request failed.'
+  try {
+    const j = JSON.parse(raw) as { detail?: unknown }
+    if (j && typeof j === 'object' && 'detail' in j) {
+      const d = j.detail
+      if (typeof d === 'string') return d
+      if (Array.isArray(d)) {
+        return d
+          .map((item) => {
+            if (typeof item === 'string') return item
+            if (item && typeof item === 'object' && 'msg' in item) {
+              return String((item as { msg: string }).msg)
+            }
+            return JSON.stringify(item)
+          })
+          .join(' ')
+      }
+    }
+  } catch {
+    /* not JSON */
+  }
+  return raw
+}
+
+async function throwIfNotOk(res: Response): Promise<void> {
+  if (res.ok) return
+  const text = await res.text()
+  throw new Error(formatApiErrorResponseBody(text))
+}
+
 function networkErrorMessage(cause: unknown): string {
   const proxyHint =
     API_BASE === '/api'
@@ -77,13 +113,13 @@ export async function uploadFile(file: File, kindOverride?: string): Promise<Upl
     method: 'POST',
     body: form,
   })
-  if (!res.ok) throw new Error(await res.text())
+  await throwIfNotOk(res)
   return res.json()
 }
 
 export async function getFileColumns(fileId: string): Promise<FileColumns> {
   const res = await apiFetch(`${API_BASE}/files/${fileId}/columns`)
-  if (!res.ok) throw new Error(await res.text())
+  await throwIfNotOk(res)
   return res.json()
 }
 
@@ -104,13 +140,13 @@ export async function createJob(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(await res.text())
+  await throwIfNotOk(res)
   return res.json()
 }
 
 export async function getJob(id: string): Promise<Job> {
   const res = await apiFetch(`${API_BASE}/jobs/${id}`)
-  if (!res.ok) throw new Error(await res.text())
+  await throwIfNotOk(res)
   return res.json()
 }
 

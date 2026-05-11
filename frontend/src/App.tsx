@@ -22,7 +22,18 @@ function App() {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [selectedNarrative, setSelectedNarrative] = useState<string[]>([])
   const [columnsError, setColumnsError] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
   const [clock, setClock] = useState(() => new Date())
+
+  const showToast = useCallback((message: string) => {
+    setToast(message)
+  }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const id = window.setTimeout(() => setToast(null), 9000)
+    return () => window.clearTimeout(id)
+  }, [toast])
 
   const timeZoneIana = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
   const timeZoneShort = useMemo(() => {
@@ -64,14 +75,15 @@ function App() {
       } catch (e) {
         if (!cancelled) {
           setKeyColumns([])
-          setColumnsError(e instanceof Error ? e.message : String(e))
+          setColumnsError(null)
+          showToast(e instanceof Error ? e.message : String(e))
         }
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [needsKeyFields, fileA])
+  }, [needsKeyFields, fileA, showToast])
 
   const toggleKey = useCallback((name: string) => {
     setSelectedKeys((prev) =>
@@ -99,7 +111,7 @@ function App() {
         setFileB(uploaded)
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      showToast(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
@@ -151,11 +163,15 @@ function App() {
       )
       setJob(j)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      showToast(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
   }
+
+  const startOver = useCallback(() => {
+    window.location.reload()
+  }, [])
 
   const pollJob = useCallback(async () => {
     if (!job?.id) return
@@ -329,9 +345,15 @@ function App() {
 
       <section className="panel">
         <h2>{needsKeyFields ? '4. Run comparison' : '2. Run comparison'}</h2>
-        <button type="button" className="primary" disabled={busy || !canRun} onClick={runCompare}>
-          {busy ? 'Working…' : 'Compare'}
-        </button>
+        <p className="hint run-actions-hint">Start over reloads the page so you can run a new comparison from a clean state.</p>
+        <div className="run-actions">
+          <button type="button" className="primary" disabled={busy || !canRun} onClick={runCompare}>
+            {busy ? 'Working…' : 'Compare'}
+          </button>
+          <button type="button" className="secondary" onClick={startOver}>
+            Start over
+          </button>
+        </div>
       </section>
 
       {error && <p className="error">{error}</p>}
@@ -403,6 +425,17 @@ function App() {
           </div>
         </div>
       </footer>
+
+      {toast && (
+        <div className="toast-wrap" role="alert" aria-live="assertive">
+          <div className="toast">
+            <p className="toast-message">{toast}</p>
+            <button type="button" className="toast-dismiss" onClick={() => setToast(null)} aria-label="Dismiss">
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

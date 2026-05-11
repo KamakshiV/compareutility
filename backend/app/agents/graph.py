@@ -4,6 +4,7 @@ LangGraph orchestrator: ingestion → schema → mapping → rules → execution
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Literal, Optional
 
@@ -21,6 +22,11 @@ from . import (
 from .state import ReconcileState
 from app.db.models import FileKind
 
+log = logging.getLogger(__name__)
+
+# Compiling the graph is expensive; reuse one compiled app for all jobs in this process.
+_compiled_compare_app = None
+
 
 def _wrap(agent_run):
     def _node(state: ReconcileState) -> ReconcileState:
@@ -31,6 +37,7 @@ def _wrap(agent_run):
 
 
 def build_graph():
+    log.info("Build compare graph")
     g = StateGraph(ReconcileState)
     g.add_node("ingestion", _wrap(ingestion_agent.run))
     g.add_node("schema_profiler", _wrap(schema_profiler_agent.run))
@@ -61,13 +68,20 @@ def build_graph():
     return g.compile()
 
 
+def get_compiled_compare_graph():
+    global _compiled_compare_app
+    if _compiled_compare_app is None:
+        _compiled_compare_app = build_graph()
+    return _compiled_compare_app
+
+
 def run_compare_graph(
     local_paths: list[Path],
     kinds: list[FileKind],
     key_field_names: Optional[list[str]] = None,
     narrative_field_names: Optional[list[str]] = None,
 ) -> dict[str, Any]:
-    app = build_graph()
+    app = get_compiled_compare_graph()
     init: dict[str, Any] = {
         "local_paths": [str(p) for p in local_paths],
         "kinds": [k.value for k in kinds],
