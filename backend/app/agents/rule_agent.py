@@ -35,6 +35,7 @@ def run(state: ReconcileState) -> dict:
         "and what is NOT detected. Mention one-way File A→File B for spreadsheets.",
         stage="rules",
         max_user_chars=4000,
+        chat_model_id=state.get("openai_model"),
     )
     if llm is not None:
         rules["llm_notes"] = llm

@@ -4,6 +4,7 @@ import {
   exportPdfUrl,
   getFileColumns,
   getJob,
+  getOpenaiModelOptions,
   reportUrl,
   uploadFile,
   type Job,
@@ -22,6 +23,8 @@ function App() {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [selectedNarrative, setSelectedNarrative] = useState<string[]>([])
   const [columnsError, setColumnsError] = useState<string | null>(null)
+  const [llmModels, setLlmModels] = useState<string[]>(['gpt-4o-mini'])
+  const [selectedOpenaiModel, setSelectedOpenaiModel] = useState('gpt-4o-mini')
   const [toast, setToast] = useState<string | null>(null)
   const [clock, setClock] = useState(() => new Date())
 
@@ -34,6 +37,22 @@ function App() {
     const id = window.setTimeout(() => setToast(null), 9000)
     return () => window.clearTimeout(id)
   }, [toast])
+
+  useEffect(() => {
+    let cancelled = false
+    void getOpenaiModelOptions()
+      .then((opts) => {
+        if (cancelled) return
+        setLlmModels(opts.models)
+        setSelectedOpenaiModel(opts.default)
+      })
+      .catch(() => {
+        /* keep built-in fallback list */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const timeZoneIana = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
   const timeZoneShort = useMemo(() => {
@@ -160,6 +179,7 @@ function App() {
         files.map((f) => f.id),
         allPdf ? undefined : selectedKeys,
         allPdf ? undefined : selectedNarrative,
+        selectedOpenaiModel,
       )
       setJob(j)
     } catch (e) {
@@ -345,6 +365,21 @@ function App() {
 
       <section className="panel">
         <h2>{needsKeyFields ? '4. Run comparison' : '2. Run comparison'}</h2>
+        <label className="field">
+          <span>OpenAI model (for pipeline summaries when USE_LLM_SUMMARY is enabled)</span>
+          <select
+            className="select-input"
+            value={selectedOpenaiModel}
+            onChange={(e) => setSelectedOpenaiModel(e.target.value)}
+            aria-label="OpenAI model for optional LLM steps"
+          >
+            {llmModels.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </label>
         <p className="hint run-actions-hint">Start over reloads the page so you can run a new comparison from a clean state.</p>
         <div className="run-actions">
           <button type="button" className="primary" disabled={busy || !canRun} onClick={runCompare}>
@@ -372,6 +407,11 @@ function App() {
           {job.narrative_field_names && job.narrative_field_names.length > 0 && (
             <p className="key-summary">
               Narrative field(s): <code>{job.narrative_field_names.join(', ')}</code>
+            </p>
+          )}
+          {job.openai_model && (
+            <p className="key-summary">
+              OpenAI model: <code>{job.openai_model}</code>
             </p>
           )}
           {job.error_message && <p className="error">{job.error_message}</p>}

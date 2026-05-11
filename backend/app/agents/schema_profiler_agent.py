@@ -35,6 +35,7 @@ def run(state: ReconcileState) -> dict:
         "(e.g. first sheet only, text PDFs vs scanned, SAP JSON shape). No generic filler.",
         stage="schema_profiler",
         max_user_chars=3000,
+        chat_model_id=state.get("openai_model"),
     )
     if llm is not None:
         profile["llm_notes"] = llm

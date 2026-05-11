@@ -80,6 +80,7 @@ def run_compare_graph(
     kinds: list[FileKind],
     key_field_names: Optional[list[str]] = None,
     narrative_field_names: Optional[list[str]] = None,
+    openai_model: Optional[str] = None,
 ) -> dict[str, Any]:
     app = get_compiled_compare_graph()
     init: dict[str, Any] = {
@@ -90,6 +91,8 @@ def run_compare_graph(
         init["key_field_names"] = key_field_names
     if narrative_field_names:
         init["narrative_field_names"] = narrative_field_names
+    if openai_model:
+        init["openai_model"] = openai_model
     final = app.invoke(init)
     comparison = final.get("comparison_result")
     err = final.get("error")

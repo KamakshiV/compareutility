@@ -19,6 +19,10 @@ class CreateJobRequest(BaseModel):
         default=None,
         description="Columns used for export/PDF wording, e.g. document number (Excel / SAP).",
     )
+    openai_model: Optional[str] = Field(
+        default=None,
+        description="OpenAI model id (or Azure deployment name) when USE_LLM_SUMMARY is enabled.",
+    )
 
 
 class UploadedFileOut(BaseModel):
@@ -38,11 +42,19 @@ class JobOut(BaseModel):
     report_storage_key: Optional[str]
     key_field_names: Optional[list[str]]
     narrative_field_names: Optional[list[str]]
+    openai_model: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     file_ids: list[uuid.UUID]
 
     model_config = {"from_attributes": True}
+
+
+class OpenaiModelOptionsOut(BaseModel):
+    """Options for the UI model dropdown (must match server allowlist)."""
+
+    models: list[str]
+    default: str
 
 
 class FileColumnsOut(BaseModel):

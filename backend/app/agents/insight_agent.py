@@ -42,5 +42,6 @@ def run(state: ReconcileState) -> dict[str, Any]:
         user,
         stage="insight",
         max_user_chars=12000,
+        chat_model_id=state.get("openai_model"),
     )
     return {"llm_insight": text}

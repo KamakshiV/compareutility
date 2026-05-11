@@ -33,6 +33,7 @@ def run(state: ReconcileState) -> dict:
         "Do not contradict that matching is by exact column name in this POC.",
         stage="mapping",
         max_user_chars=3500,
+        chat_model_id=state.get("openai_model"),
     )
     if llm is not None:
         mapping["llm_notes"] = llm

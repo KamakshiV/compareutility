@@ -57,6 +57,7 @@ async def run_comparison_job(db: AsyncSession, job_id: uuid.UUID) -> None:
             kinds,
             job.key_field_names,
             job.narrative_field_names,
+            openai_model=job.openai_model,
         )
         payload = {
             "comparison": graph_out.get("comparison"),
@@ -65,6 +66,7 @@ async def run_comparison_job(db: AsyncSession, job_id: uuid.UUID) -> None:
             "dashboard_narrative": graph_out.get("dashboard_narrative"),
             "key_field_names": job.key_field_names,
             "narrative_field_names": job.narrative_field_names,
+            "openai_model": job.openai_model,
         }
         if graph_out.get("error"):
             job.status = JobStatus.failed

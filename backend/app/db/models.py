@@ -64,6 +64,8 @@ class ComparisonJob(Base):
     # Request order of file_ids (File A first, File B second for spreadsheets). If null (legacy rows),
     # workers fall back to sorting uploads by created_at.
     ordered_file_ids: Mapped[Optional[list[str]]] = mapped_column(JSONB, nullable=True)
+    # When USE_LLM_SUMMARY is on, pipeline LLM calls use this model (OpenAI) or deployment name (Azure).
+    openai_model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 

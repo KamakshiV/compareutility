@@ -99,9 +99,15 @@ export type Job = {
   report_storage_key: string | null
   key_field_names: string[] | null
   narrative_field_names: string[] | null
+  openai_model: string | null
   created_at: string
   updated_at: string
   file_ids: string[]
+}
+
+export type OpenaiModelOptions = {
+  models: string[]
+  default: string
 }
 
 export async function uploadFile(file: File, kindOverride?: string): Promise<UploadedFile> {
@@ -123,10 +129,17 @@ export async function getFileColumns(fileId: string): Promise<FileColumns> {
   return res.json()
 }
 
+export async function getOpenaiModelOptions(): Promise<OpenaiModelOptions> {
+  const res = await apiFetch(`${API_BASE}/jobs/openai-model-options`)
+  await throwIfNotOk(res)
+  return res.json()
+}
+
 export async function createJob(
   fileIds: string[],
   keyFieldNames?: string[],
   narrativeFieldNames?: string[],
+  openaiModel?: string,
 ): Promise<Job> {
   const body: Record<string, unknown> = { file_ids: fileIds }
   if (keyFieldNames !== undefined && keyFieldNames.length > 0) {
@@ -134,6 +147,9 @@ export async function createJob(
   }
   if (narrativeFieldNames !== undefined && narrativeFieldNames.length > 0) {
     body.narrative_field_names = narrativeFieldNames
+  }
+  if (openaiModel !== undefined && openaiModel.trim() !== '') {
+    body.openai_model = openaiModel.trim()
   }
   const res = await apiFetch(`${API_BASE}/jobs`, {
     method: 'POST',

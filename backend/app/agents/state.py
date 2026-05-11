@@ -12,6 +12,7 @@ class ReconcileState(TypedDict, total=False):
     kinds: list[str]
     key_field_names: Optional[list[str]]
     narrative_field_names: Optional[list[str]]
+    openai_model: Optional[str]
     ingest_notes: dict[str, Any]
     schema_profile: dict[str, Any]
     column_mapping: dict[str, Any]

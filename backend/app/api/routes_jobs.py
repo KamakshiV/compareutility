@@ -9,7 +9,8 @@ from sqlalchemy.orm import selectinload
 
 from app.db.database import AsyncSessionLocal, get_db
 from app.db.models import ComparisonJob, FileKind, JobStatus, UploadedFile
-from app.models.schemas import CreateJobRequest, JobOut
+from app.constants.openai_models import DEFAULT_OPENAI_CHAT_MODEL, OPENAI_CHAT_MODEL_IDS
+from app.models.schemas import CreateJobRequest, JobOut, OpenaiModelOptionsOut
 from app.services.column_preview import list_columns_from_upload
 from app.services.storage_service import StoredBlobMissingError, get_storage
 from app.services.job_file_order import file_ids_for_compare
@@ -18,6 +19,21 @@ from app.workers.comparison_job import run_comparison_job
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 _TABULAR = {FileKind.xlsx, FileKind.xls, FileKind.sap}
+_ALLOWED_MODELS = frozenset(OPENAI_CHAT_MODEL_IDS)
+
+
+def _normalize_job_openai_model(raw: Optional[str]) -> Optional[str]:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    if s not in _ALLOWED_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"openai_model must be one of: {', '.join(OPENAI_CHAT_MODEL_IDS)}",
+        )
+    return s
 
 
 async def _validate_key_fields(body: CreateJobRequest, files: list[UploadedFile]) -> Optional[list[str]]:
@@ -113,6 +129,12 @@ async def _bg_run_job(job_id: uuid.UUID) -> None:
         await run_comparison_job(session, job_id)
 
 
+@router.get("/openai-model-options", response_model=OpenaiModelOptionsOut)
+async def openai_model_options():
+    """Public list for the UI dropdown (validated again on POST /jobs)."""
+    return OpenaiModelOptionsOut(models=list(OPENAI_CHAT_MODEL_IDS), default=DEFAULT_OPENAI_CHAT_MODEL)
+
+
 @router.post("", response_model=JobOut)
 async def create_job(
     body: CreateJobRequest,
@@ -129,6 +151,7 @@ async def create_job(
 
     key_fields = await _validate_key_fields(body, files)
     narrative_fields = await _validate_narrative_fields(body, files, key_fields)
+    openai_model = _normalize_job_openai_model(body.openai_model)
 
     job = ComparisonJob(
         status=JobStatus.pending,
@@ -137,6 +160,7 @@ async def create_job(
         key_field_names=key_fields,
         narrative_field_names=narrative_fields,
         ordered_file_ids=[str(x) for x in body.file_ids],
+        openai_model=openai_model,
     )
     job.files = files
     db.add(job)
@@ -153,6 +177,7 @@ async def create_job(
         report_storage_key=job.report_storage_key,
         key_field_names=job.key_field_names,
         narrative_field_names=job.narrative_field_names,
+        openai_model=job.openai_model,
         created_at=job.created_at,
         updated_at=job.updated_at,
         file_ids=[f.id for f in files],
@@ -168,6 +193,7 @@ def _job_to_out(job: ComparisonJob) -> JobOut:
         report_storage_key=job.report_storage_key,
         key_field_names=job.key_field_names,
         narrative_field_names=job.narrative_field_names,
+        openai_model=job.openai_model,
         created_at=job.created_at,
         updated_at=job.updated_at,
         file_ids=file_ids_for_compare(job),

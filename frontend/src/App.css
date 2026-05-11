@@ -239,6 +239,16 @@
   color: var(--text);
 }
 
+.select-input {
+  padding: 0.5rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  max-width: 100%;
+}
+
 .file-slots {
   display: flex;
   flex-direction: column;

@@ -7,6 +7,7 @@ import time
 from typing import Any, Optional
 
 from app.config import get_settings
+from app.constants.openai_models import DEFAULT_OPENAI_CHAT_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ def _resolve_purpose(stage: str, purpose: Optional[str]) -> str:
     return _DEFAULT_PURPOSE_FOR_STAGE.get(stage, stage.replace("_", " "))
 
 
-def _chat_model() -> Any:
+def _chat_model(chat_model_id: Optional[str] = None) -> Any:
     """Load OpenAI/Azure client only when an LLM call is about to run."""
     from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
@@ -35,14 +36,19 @@ def _chat_model() -> Any:
     key = s.openai_api_key
     if not key:
         raise RuntimeError("OPENAI_API_KEY not set")
+    requested = (chat_model_id or "").strip()
     if s.openai_api_base and s.openai_deployment_name and s.openai_api_version:
+        deployment = requested or (s.openai_deployment_name or "").strip()
+        if not deployment:
+            raise RuntimeError("Azure OpenAI requires OPENAI_DEPLOYMENT_NAME or a job-selected model id")
         return AzureChatOpenAI(
             azure_endpoint=s.openai_api_base,
             api_key=key,
             api_version=s.openai_api_version,
-            azure_deployment=s.openai_deployment_name,
+            azure_deployment=deployment,
         )
-    return ChatOpenAI(api_key=key, model="gpt-4o-mini")
+    model = requested or DEFAULT_OPENAI_CHAT_MODEL
+    return ChatOpenAI(api_key=key, model=model)
 
 
 def pipeline_llm_complete(
@@ -52,6 +58,7 @@ def pipeline_llm_complete(
     stage: str = "pipeline",
     purpose: Optional[str] = None,
     max_user_chars: int = 8000,
+    chat_model_id: Optional[str] = None,
 ) -> Optional[str]:
     """
     When USE_LLM_SUMMARY is false: return None (callers omit LLM-enriched fields).
@@ -76,11 +83,13 @@ def pipeline_llm_complete(
         s.openai_api_base and s.openai_deployment_name and s.openai_api_version
     )
     backend = "azure_openai" if use_azure else "openai"
+    model_note = (chat_model_id or "").strip() or "(default)"
     logger.info(
-        'Starting LLM service for "%s" via Agent [%s] (backend=%s system_chars=%s user_chars=%s)',
+        'Starting LLM service for "%s" via Agent [%s] (backend=%s model=%s system_chars=%s user_chars=%s)',
         svc_purpose,
         stage,
         backend,
+        model_note,
         len(system),
         len(body),
     )
@@ -88,7 +97,7 @@ def pipeline_llm_complete(
 
     t0 = time.perf_counter()
     try:
-        llm = _chat_model()
+        llm = _chat_model(chat_model_id)
         out = llm.invoke([SystemMessage(content=system), HumanMessage(content=body)])
         content = out.content if hasattr(out, "content") else str(out)
         text = content if isinstance(content, str) else str(content)

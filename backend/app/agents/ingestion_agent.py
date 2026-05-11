@@ -105,6 +105,7 @@ def run(state: ReconcileState) -> dict:
         "(pairing, naming, duplicates, file types). Do not invent data not implied above.",
         stage="ingestion",
         max_user_chars=2000,
+        chat_model_id=state.get("openai_model"),
     )
     if llm is not None:
         notes["llm_notes"] = llm
