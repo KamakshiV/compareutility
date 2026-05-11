@@ -60,6 +60,12 @@ async def lifespan(_: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
             await apply_comparison_job_column_patches(conn)
         log.info("Database schema ready (create_all + patches applied).")
+        if os.environ.get("RENDER") and not settings.azure_storage_connection_string:
+            log.warning(
+                "Render: AZURE_STORAGE_CONNECTION_STRING is unset — file uploads use local disk "
+                "(STORAGE_LOCAL_PATH) and do not survive redeploys; DB rows may reference missing files. "
+                "Set AZURE_STORAGE_CONNECTION_STRING + AZURE_CONTAINER_NAME for durable storage."
+            )
     except Exception as exc:
         ename = type(exc).__name__
         em = str(exc).lower()

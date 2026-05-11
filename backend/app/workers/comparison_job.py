@@ -12,7 +12,7 @@ from app.config import get_settings
 from app.db.models import ComparisonJob, JobStatus
 from app.services.job_file_order import file_ids_for_compare
 from app.services.report_generator import write_summary_report
-from app.services.storage_service import get_storage
+from app.services.storage_service import StoredBlobMissingError, get_storage
 
 
 async def run_comparison_job(db: AsyncSession, job_id: uuid.UUID) -> None:
@@ -78,6 +78,11 @@ async def run_comparison_job(db: AsyncSession, job_id: uuid.UUID) -> None:
             report_key = await storage.save_bytes(report_path.read_bytes(), suffix=".xlsx")
             job.report_storage_key = report_key
 
+        job.updated_at = datetime.utcnow()
+        await db.commit()
+    except StoredBlobMissingError as e:
+        job.status = JobStatus.failed
+        job.error_message = str(e)
         job.updated_at = datetime.utcnow()
         await db.commit()
     except Exception as e:

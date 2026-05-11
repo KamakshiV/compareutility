@@ -11,7 +11,7 @@ from app.db.database import AsyncSessionLocal, get_db
 from app.db.models import ComparisonJob, FileKind, JobStatus, UploadedFile
 from app.models.schemas import CreateJobRequest, JobOut
 from app.services.column_preview import list_columns_from_upload
-from app.services.storage_service import get_storage
+from app.services.storage_service import StoredBlobMissingError, get_storage
 from app.services.job_file_order import file_ids_for_compare
 from app.workers.comparison_job import run_comparison_job
 
@@ -50,9 +50,12 @@ async def _validate_key_fields(body: CreateJobRequest, files: list[UploadedFile]
 
     storage = get_storage()
     for f in files:
-        cols = set(
-            await list_columns_from_upload(storage, f.storage_key, f.original_name, f.kind)
-        )
+        try:
+            cols = set(
+                await list_columns_from_upload(storage, f.storage_key, f.original_name, f.kind)
+            )
+        except StoredBlobMissingError as e:
+            raise HTTPException(status_code=410, detail=str(e)) from e
         for k in keys:
             if k not in cols:
                 raise HTTPException(
@@ -90,9 +93,12 @@ async def _validate_narrative_fields(
         )
     storage = get_storage()
     for f in files:
-        cols = set(
-            await list_columns_from_upload(storage, f.storage_key, f.original_name, f.kind)
-        )
+        try:
+            cols = set(
+                await list_columns_from_upload(storage, f.storage_key, f.original_name, f.kind)
+            )
+        except StoredBlobMissingError as e:
+            raise HTTPException(status_code=410, detail=str(e)) from e
         for name in ordered:
             if name not in cols:
                 raise HTTPException(

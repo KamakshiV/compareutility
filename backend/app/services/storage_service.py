@@ -6,6 +6,14 @@ from pathlib import Path
 from app.config import get_settings
 
 
+class StoredBlobMissingError(FileNotFoundError):
+    """
+    Raised when a row's storage_key has no backing bytes (common on Render with local disk:
+    redeploys/restarts wipe ./data/storage while Postgres still references old uploads).
+    Fix: set AZURE_STORAGE_CONNECTION_STRING (and container) for durable blob storage.
+    """
+
+
 class StorageBackend:
     async def save_bytes(self, data: bytes, suffix: str = "") -> str:
         raise NotImplementedError
@@ -29,7 +37,14 @@ class LocalStorage(StorageBackend):
         return key
 
     async def read_bytes(self, key: str) -> bytes:
-        return (self.root / key).read_bytes()
+        path = self.root / key
+        if not path.is_file():
+            raise StoredBlobMissingError(
+                f"Upload file not found at {path}. On Render, local STORAGE_LOCAL_PATH is ephemeral: "
+                "redeploys remove files while the database still lists them. Re-upload after deploy, "
+                "or configure AZURE_STORAGE_CONNECTION_STRING (+ AZURE_CONTAINER_NAME) for persistent storage."
+            )
+        return path.read_bytes()
 
     def local_path(self, key: str) -> Path:
         return self.root / key

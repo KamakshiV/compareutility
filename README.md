@@ -91,8 +91,9 @@ The API runs `create_all` + small `ALTER … IF NOT EXISTS` patches on startup, 
    | `OPENAI_API_KEY` | From OpenAI (keep **only** on Render) |
    | `USE_LLM_SUMMARY` | `true` or `false` |
    | `STORAGE_LOCAL_PATH` | e.g. `/var/data/storage` (optional; see note below) |
+   | `AZURE_STORAGE_CONNECTION_STRING` | **Recommended on Render** — durable blob storage for uploads and reports (with `AZURE_CONTAINER_NAME`). |
 
-**Ephemeral disk:** On Render’s **free** tier, local file storage is wiped on redeploy. For anything beyond a demo, configure **Azure Blob** (`AZURE_STORAGE_CONNECTION_STRING`, `AZURE_CONTAINER_NAME`) so uploads and reports persist.
+**Ephemeral disk:** On Render’s **free** tier, local file storage is wiped on redeploy while Postgres still lists old `uploaded_files` rows, so `POST /jobs` can fail with a missing file under `STORAGE_LOCAL_PATH`. Re-upload after each deploy, or configure **Azure Blob** (`AZURE_STORAGE_CONNECTION_STRING`, `AZURE_CONTAINER_NAME`). The API returns **HTTP 410** with that explanation when the blob is missing.
 
 ### 3. Vercel (frontend)
 

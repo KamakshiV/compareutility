@@ -12,7 +12,7 @@ from app.db.models import FileKind, UploadedFile
 from app.models.schemas import FileColumnsOut, UploadedFileOut
 from app.services.column_preview import list_columns_from_upload
 from app.services.file_kind import detect_kind
-from app.services.storage_service import get_storage
+from app.services.storage_service import StoredBlobMissingError, get_storage
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -66,6 +66,8 @@ async def get_file_columns(file_id: uuid.UUID, db: Annotated[AsyncSession, Depen
     storage = get_storage()
     try:
         cols = await list_columns_from_upload(storage, row.storage_key, row.original_name, row.kind)
+    except StoredBlobMissingError as e:
+        raise HTTPException(status_code=410, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return FileColumnsOut(file_id=row.id, columns=cols, kind=row.kind.value)
